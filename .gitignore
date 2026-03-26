@@ -1,0 +1,15 @@
+node_modules/
+.next/
+dist/
+artifacts/
+cache/
+typechain-types/
+.env
+*.log
+.env.local
+.env.*.local
+backend/uploads/
+*.tsbuildinfo
+.DS_Store
+**/.DS_Store
+ignition/deployments/

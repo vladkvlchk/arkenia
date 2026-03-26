@@ -1,0 +1,6 @@
+{
+  "name": "onchain-fundraising",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": ["contracts", "backend", "frontend"]
+}
