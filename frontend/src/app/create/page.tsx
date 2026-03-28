@@ -92,11 +92,24 @@ export default function CreatePage() {
     );
   }
 
-  const tokenBadge = (
-    <span className="inline-flex items-center gap-1.5 rounded-md bg-gray-100 border border-gray-200 px-2 py-1 text-xs font-medium text-gray-700">
-      <img src={selectedToken.logo} alt={selectedToken.symbol} className="w-3.5 h-3.5 rounded-full" />
-      {selectedToken.symbol}
-    </span>
+  const tokenInline = (
+    <div className="flex items-center gap-1.5 shrink-0 pr-1">
+      <img src={selectedToken.logo} alt={selectedToken.symbol} className="w-4 h-4 rounded-full" />
+      <span className="text-sm font-medium text-gray-700">{selectedToken.symbol}</span>
+      <a
+        href={`https://basescan.org/token/${selectedToken.address}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-gray-400 hover:text-gray-600 transition"
+        title="View on Basescan"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+          <polyline points="15 3 21 3 21 9" />
+          <line x1="10" y1="14" x2="21" y2="3" />
+        </svg>
+      </a>
+    </div>
   );
 
   return (
@@ -151,39 +164,35 @@ export default function CreatePage() {
           </div>
 
           <div>
-            <label className="block text-sm text-gray-500 mb-1">
-              <span className="flex items-center gap-2">
-                Min to raise {tokenBadge}
-                <span className="text-gray-400">(0 = no minimum)</span>
-              </span>
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              placeholder="0"
-              value={floorAmount}
-              onChange={(e) => setFloorAmount(e.target.value)}
-              className="w-full rounded-lg bg-gray-100 border border-gray-200 px-3 py-2 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-gray-900"
-            />
+            <label className="block text-sm text-gray-500 mb-1">Min to raise <span className="text-gray-400">(0 = no minimum)</span></label>
+            <div className="flex items-center gap-2 rounded-lg bg-gray-100 border border-gray-200 px-3 focus-within:border-gray-900">
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="0"
+                value={floorAmount}
+                onChange={(e) => setFloorAmount(e.target.value)}
+                className="flex-1 bg-transparent py-2 text-gray-900 placeholder-gray-400 focus:outline-none"
+              />
+              {tokenInline}
+            </div>
           </div>
 
           <div>
-            <label className="block text-sm text-gray-500 mb-1">
-              <span className="flex items-center gap-2">
-                Max to raise {tokenBadge}
-                <span className="text-gray-400">(0 = unlimited)</span>
-              </span>
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              placeholder="0"
-              value={ceilAmount}
-              onChange={(e) => setCeilAmount(e.target.value)}
-              className="w-full rounded-lg bg-gray-100 border border-gray-200 px-3 py-2 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-gray-900"
-            />
+            <label className="block text-sm text-gray-500 mb-1">Max to raise <span className="text-gray-400">(0 = unlimited)</span></label>
+            <div className="flex items-center gap-2 rounded-lg bg-gray-100 border border-gray-200 px-3 focus-within:border-gray-900">
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="0"
+                value={ceilAmount}
+                onChange={(e) => setCeilAmount(e.target.value)}
+                className="flex-1 bg-transparent py-2 text-gray-900 placeholder-gray-400 focus:outline-none"
+              />
+              {tokenInline}
+            </div>
           </div>
 
           <button
