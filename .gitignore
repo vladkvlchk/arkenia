@@ -13,3 +13,5 @@ backend/uploads/
 .DS_Store
 **/.DS_Store
 ignition/deployments/
+todo.md
+**/todo.md

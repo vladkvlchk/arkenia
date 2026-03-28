@@ -119,7 +119,7 @@ export async function initDb() {
     await pool.query(
       `INSERT INTO profiles (wallet, twitter_id, twitter_username, twitter_avatar)
        VALUES ($1, $2, $3, '')
-       ON CONFLICT (wallet) DO NOTHING`,
+       ON CONFLICT DO NOTHING`,
       [s.wallet, s.id, s.username]
     );
   }
