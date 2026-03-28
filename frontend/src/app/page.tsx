@@ -18,7 +18,7 @@ interface CampaignMeta {
 export default function HomePage() {
   const [metaMap, setMetaMap] = useState<Map<string, CampaignMeta>>(new Map());
 
-  const { data: campaigns } = useReadContract({
+  const { data: campaigns, isLoading: campaignsLoading } = useReadContract({
     address: FACTORY_ADDRESS,
     abi: FACTORY_ABI,
     functionName: "getCampaigns",
@@ -48,7 +48,18 @@ export default function HomePage() {
         </p>
       </div>
 
-      {campaignAddresses.length === 0 ? (
+      {campaignsLoading ? (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="rounded-xl border border-gray-200 bg-white p-5 animate-pulse">
+              <div className="w-full aspect-[3/1] rounded-lg bg-gray-200 mb-4" />
+              <div className="h-4 bg-gray-200 rounded w-2/3 mb-2" />
+              <div className="h-3 bg-gray-200 rounded w-full mb-1" />
+              <div className="h-3 bg-gray-200 rounded w-4/5" />
+            </div>
+          ))}
+        </div>
+      ) : campaignAddresses.length === 0 ? (
         <div className="text-center py-16 text-gray-400">
           <p className="text-lg">No campaigns yet.</p>
           <p className="text-sm mt-1">Be the first to create one!</p>
