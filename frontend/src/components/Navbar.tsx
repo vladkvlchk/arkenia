@@ -22,10 +22,10 @@ export function Navbar() {
             Arkenia
           </Link>
           <div className="flex gap-4">
-            <Link href="/" className="text-gray-500 hover:text-gray-900 transition">
+            <Link href="/" className="text-[14px] text-gray-500 hover:text-gray-900 transition">
               Campaigns
             </Link>
-            <Link href="/creators" className="text-gray-500 hover:text-gray-900 transition">
+            <Link href="/creators" className="text-[14px] text-gray-500 hover:text-gray-900 transition">
               Creators
             </Link>
           </div>
