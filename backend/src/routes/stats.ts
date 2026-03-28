@@ -1,23 +1,13 @@
 import { Router, Request, Response } from "express";
 import multer from "multer";
 import path from "path";
-import crypto from "crypto";
 import { getCampaignStats, getAllCampaignStats, getUserStats, getLeaderboard, upsertCampaignMeta, getCampaignMeta, getAllCampaignMeta, getCampaignsByUsername, getEventsForCampaign } from "../services/db";
-import { config } from "../config";
+import { uploadToR2 } from "../services/r2";
 
 const router = Router();
 
-// File upload setup
-const storage = multer.diskStorage({
-  destination: path.join(__dirname, "../../uploads"),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, `${crypto.randomBytes(16).toString("hex")}${ext}`);
-  },
-});
-
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
   fileFilter: (_req, file, cb) => {
     const allowed = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"];
@@ -111,9 +101,10 @@ router.post(
       const logoFile = files?.logo?.[0];
       const coverFile = files?.cover?.[0];
 
-      const baseUrl = config.backendUrl;
-      const logoUrl = logoFile ? `${baseUrl}/uploads/${logoFile.filename}` : "";
-      const coverUrl = coverFile ? `${baseUrl}/uploads/${coverFile.filename}` : "";
+      const [logoUrl, coverUrl] = await Promise.all([
+        logoFile ? uploadToR2(logoFile) : Promise.resolve(""),
+        coverFile ? uploadToR2(coverFile) : Promise.resolve(""),
+      ]);
 
       await upsertCampaignMeta(
         req.params.address,
