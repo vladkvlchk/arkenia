@@ -1,9 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { usePrivy } from "@privy-io/react-auth";
+import { useAccount } from "wagmi";
 
 export function Navbar() {
+  const { ready, authenticated, login, logout } = usePrivy();
+  const { address } = useAccount();
+
+  const shortAddress = address
+    ? `${address.slice(0, 6)}…${address.slice(-4)}`
+    : null;
+
   return (
     <nav className="border-b border-gray-200 bg-white">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
@@ -23,7 +31,23 @@ export function Navbar() {
             </Link>
           </div>
         </div>
-        <ConnectButton />
+        {ready && (
+          authenticated ? (
+            <button
+              onClick={logout}
+              className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+            >
+              {shortAddress ?? "Disconnect"}
+            </button>
+          ) : (
+            <button
+              onClick={login}
+              className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 transition"
+            >
+              Connect Wallet
+            </button>
+          )
+        )}
       </div>
     </nav>
   );
