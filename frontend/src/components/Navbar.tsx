@@ -17,7 +17,7 @@ export function Navbar() {
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
         <div className="flex items-center gap-8">
           <Link href="/" className="text-xl font-bold text-gray-900">
-            Aurelia
+            Arkenia
           </Link>
           <div className="flex gap-4">
             <Link href="/" className="text-gray-500 hover:text-gray-900 transition">
