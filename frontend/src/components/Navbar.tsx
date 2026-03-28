@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { usePrivy } from "@privy-io/react-auth";
 import { useAccount } from "wagmi";
 
 export function Navbar() {
-  const { ready, authenticated, login, logout } = usePrivy();
+  const { ready, authenticated, login } = usePrivy();
   const { address } = useAccount();
+  const router = useRouter();
 
   const shortAddress = address
     ? `${address.slice(0, 6)}…${address.slice(-4)}`
@@ -26,18 +28,15 @@ export function Navbar() {
             <Link href="/creators" className="text-gray-500 hover:text-gray-900 transition">
               Creators
             </Link>
-            <Link href="/profile/me" className="text-gray-500 hover:text-gray-900 transition">
-              My Profile
-            </Link>
           </div>
         </div>
         {ready && (
           authenticated ? (
             <button
-              onClick={logout}
+              onClick={() => router.push("/profile/me")}
               className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
             >
-              {shortAddress ?? "Disconnect"}
+              {shortAddress ?? "My Profile"}
             </button>
           ) : (
             <button
