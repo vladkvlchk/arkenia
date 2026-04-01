@@ -35,7 +35,7 @@ const ERC20_ABI = [
   "function decimals() view returns (uint8)",
 ];
 
-const POLL_INTERVAL = 15_000;
+const POLL_INTERVAL = 60_000;
 const BLOCK_BATCH_SIZE = 10_000;
 const LOOKBACK_BLOCKS = 50_000;
 const MAX_RETRIES = 5;
