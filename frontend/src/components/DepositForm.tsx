@@ -42,7 +42,7 @@ export function DepositForm({
   }, [tab]);
 
   // --- Deposit logic ---
-  const { data: balance } = useReadContract({
+  const { data: balance, refetch: refetchBalance } = useReadContract({
     address: tokenAddress,
     abi: ERC20_ABI,
     functionName: "balanceOf",
@@ -83,8 +83,11 @@ export function DepositForm({
   }, [approveSuccess, refetchAllowance]);
 
   useEffect(() => {
-    if (depositSuccess && onDeposited) onDeposited();
-  }, [depositSuccess, onDeposited]);
+    if (depositSuccess) {
+      refetchBalance();
+      if (onDeposited) onDeposited();
+    }
+  }, [depositSuccess, onDeposited, refetchBalance]);
 
   const parsedAmount = amount ? parseUnits(amount, tokenDecimals) : 0n;
   const needsApproval = allowance !== undefined && parsedAmount > 0n && parsedAmount > allowance;
