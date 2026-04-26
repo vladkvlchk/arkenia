@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Baskervville, Noto_Sans_Mono } from "next/font/google";
+import { Baskervville, IBM_Plex_Sans } from "next/font/google";
 import { Providers } from "@/components/Providers";
 import { Navbar } from "@/components/Navbar";
 import "@/globals.css";
@@ -10,9 +10,10 @@ const baskervville = Baskervville({
   variable: "--font-baskervville",
 });
 
-const notoSansMono = Noto_Sans_Mono({
+const ibmPlexSans = IBM_Plex_Sans({
   subsets: ["latin"],
-  variable: "--font-noto-sans-mono",
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-ibm-plex-sans",
 });
 
 export const metadata: Metadata = {
@@ -22,7 +23,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${baskervville.variable} ${notoSansMono.variable}`}>
+    <html lang="en" className={`${baskervville.variable} ${ibmPlexSans.variable}`}>
       <body>
         <Providers>
           <Navbar />
