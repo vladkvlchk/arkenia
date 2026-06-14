@@ -33,6 +33,7 @@ contract CampaignV2 is Initializable, ReentrancyGuard, ERC1155 {
   error CampaignClosed();
   error EmptyCohort();
   error ExceedsWithdrawable();
+  error CohortNotFrozen();
 
   event Initialized(address indexed angel, address indexed token);
   event Deposited(address indexed believer, uint256 indexed cohortId, uint256 amount);
@@ -213,11 +214,17 @@ contract CampaignV2 is Initializable, ReentrancyGuard, ERC1155 {
     emit Withdrawn(amount, newCohort);
   }
 
-  /// @notice Angel returns funds to a single cohort. Distributed pro-rata among share holders.
+  /// @notice Angel returns funds to a single frozen cohort. Distributed pro-rata among holders.
+  /// @dev Only FROZEN cohorts (`cohortId < currentCohort`) may receive distributions. The active
+  /// cohort is still fully refundable 1:1, so distributing to it would let anyone sandwich the
+  /// call with `deposit → returnFunds → refund → claim` and drain the dividend at zero net cost
+  /// (HIGH-1). Forbidding active-cohort distributions makes `returnFunds` and `refund` disjoint
+  /// by cohort, which closes that round-trip.
   /// @param amount Amount of `token` to distribute.
-  /// @param cohortId Target cohort (must hold shares).
+  /// @param cohortId Target cohort (must be frozen and hold shares).
   function returnFunds(uint256 amount, uint256 cohortId) external onlyAngel nonReentrant {
     if (amount == 0) revert ZeroAmount();
+    if (cohortId >= currentCohort) revert CohortNotFrozen();
     uint256 shares = totalSharesInCohort[cohortId];
     if (shares == 0) revert EmptyCohort();
     token.safeTransferFrom(msg.sender, address(this), amount);
@@ -230,8 +237,10 @@ contract CampaignV2 is Initializable, ReentrancyGuard, ERC1155 {
   /// Each non-empty cohort receives `amount * cohortShares / totalShares`; the last non-empty
   /// cohort absorbs the integer-division remainder so the full `amount` is always distributed.
   /// Empty cohorts in the list are skipped. Reverts if none of the listed cohorts hold shares.
+  /// @dev Every listed cohort must be FROZEN (`< currentCohort`) — see `returnFunds` for why
+  /// active-cohort distributions are forbidden (HIGH-1 dividend sandwich).
   /// @param amount Total amount of `token` to distribute.
-  /// @param cohortIds List of cohorts to distribute to.
+  /// @param cohortIds List of frozen cohorts to distribute to.
   function returnFundsBatch(uint256 amount, uint256[] calldata cohortIds) external onlyAngel nonReentrant {
     if (amount == 0) revert ZeroAmount();
     uint256 len = cohortIds.length;
@@ -240,6 +249,7 @@ contract CampaignV2 is Initializable, ReentrancyGuard, ERC1155 {
     uint256 totalShares = 0;
     uint256 lastNonEmpty = type(uint256).max;
     for (uint256 i = 0; i < len; i++) {
+      if (cohortIds[i] >= currentCohort) revert CohortNotFrozen();
       uint256 shares = totalSharesInCohort[cohortIds[i]];
       if (shares > 0) {
         totalShares += shares;
