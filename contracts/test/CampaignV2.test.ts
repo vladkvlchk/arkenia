@@ -16,9 +16,10 @@ describe("CampaignV2", () => {
   let alice: HardhatEthersSigner;
   let bob: HardhatEthersSigner;
   let carol: HardhatEthersSigner;
+  let whale: HardhatEthersSigner;
 
   beforeEach(async () => {
-    [owner, angel, alice, bob, carol] = await ethers.getSigners();
+    [owner, angel, alice, bob, carol, whale] = await ethers.getSigners();
 
     const USDC = await ethers.getContractFactory("MockUSDC");
     usdc = (await USDC.deploy()) as unknown as MockUSDC;
@@ -37,9 +38,15 @@ describe("CampaignV2", () => {
     const all = await factory.getCampaigns();
     campaign = (await ethers.getContractAt("CampaignV2", all[all.length - 1])) as unknown as CampaignV2;
 
-    // fund participants and approve campaign
-    for (const who of [angel, alice, bob, carol]) {
-      await usdc.transfer(who.address, u(100_000));
+    // fund participants and approve campaign (whale needs more for the HIGH-1 PoC)
+    for (const [who, amt] of [
+      [angel, u(100_000)],
+      [alice, u(100_000)],
+      [bob, u(100_000)],
+      [carol, u(100_000)],
+      [whale, u(300_000)],
+    ] as const) {
+      await usdc.transfer(who.address, amt);
       await usdc.connect(who).approve(await campaign.getAddress(), ethers.MaxUint256);
     }
   });
@@ -53,7 +60,6 @@ describe("CampaignV2", () => {
     });
 
     it("implementation cannot be re-initialized (disabled initializers)", async () => {
-      // a fresh clone is initialized exactly once; re-calling reverts
       await expect(
         campaign.initialize(alice.address, await usdc.getAddress())
       ).to.be.reverted;
@@ -85,15 +91,51 @@ describe("CampaignV2", () => {
     });
   });
 
-  // ───────────────────────── rewards happy path ─────────────────────────
+  // ───────────────────────── close (one-way) ─────────────────────────
+
+  describe("close", () => {
+    it("permanently blocks new deposits", async () => {
+      await campaign.connect(alice).deposit(u(100));
+      await expect(campaign.connect(angel).close()).to.emit(campaign, "Closed");
+      await expect(campaign.connect(alice).deposit(u(100))).to.be.revertedWithCustomError(
+        campaign,
+        "CampaignClosed"
+      );
+    });
+
+    it("is one-way (second close reverts)", async () => {
+      await campaign.connect(angel).close();
+      await expect(campaign.connect(angel).close()).to.be.revertedWithCustomError(
+        campaign,
+        "CampaignClosed"
+      );
+    });
+
+    it("still allows refund after close", async () => {
+      await campaign.connect(alice).deposit(u(100));
+      await campaign.connect(angel).close();
+      await expect(campaign.connect(alice).refund(u(100))).to.emit(campaign, "Refunded");
+    });
+
+    it("only angel can close", async () => {
+      await expect(campaign.connect(alice).close()).to.be.revertedWithCustomError(
+        campaign,
+        "Unauthorized"
+      );
+    });
+  });
+
+  // ───────────────────────── rewards happy path (frozen cohort) ─────────────────────────
 
   describe("returnFunds + claim", () => {
     beforeEach(async () => {
       await campaign.connect(alice).deposit(u(100));
       await campaign.connect(bob).deposit(u(300));
+      // freeze cohort 0 by withdrawing its principal -> currentCohort becomes 1
+      await campaign.connect(angel).withdraw(u(400));
     });
 
-    it("distributes pro-rata and lets holders claim", async () => {
+    it("distributes pro-rata to a frozen cohort and lets holders claim", async () => {
       await campaign.connect(angel).returnFunds(u(40), 0);
       expect(await campaign.totalRewardReserves()).to.equal(u(40));
 
@@ -105,6 +147,7 @@ describe("CampaignV2", () => {
         .withArgs(bob.address, 0, u(30));
 
       expect(await campaign.totalRewardReserves()).to.equal(0);
+      expect(await usdc.balanceOf(await campaign.getAddress())).to.equal(0);
     });
 
     it("second claim with nothing new reverts", async () => {
@@ -116,25 +159,53 @@ describe("CampaignV2", () => {
       );
     });
 
-    it("returnFunds to an empty cohort reverts", async () => {
-      await expect(campaign.connect(angel).returnFunds(u(40), 99)).to.be.revertedWithCustomError(
+    it("returnFunds to a NON-frozen (active/future) cohort reverts", async () => {
+      // currentCohort == 1 now; 1 and above are not frozen
+      await expect(campaign.connect(angel).returnFunds(u(40), 1)).to.be.revertedWithCustomError(
         campaign,
-        "EmptyCohort"
+        "CohortNotFrozen"
       );
     });
   });
 
-  // ───────────────────────── SECURITY: reward double-count (audit #1) ─────────────────────────
+  // ───────────────────────── SECURITY: HIGH-1 dividend sandwich ─────────────────────────
+
+  describe("security: HIGH-1 active-cohort dividend sandwich is blocked", () => {
+    it("angel cannot returnFunds to the active cohort (kills the sandwich's victim tx)", async () => {
+      await campaign.connect(alice).deposit(u(100));
+      await campaign.connect(bob).deposit(u(100));
+      // whale front-runs with a huge deposit into the same ACTIVE cohort 0
+      await campaign.connect(whale).deposit(u(200_000));
+      // the dividend the whale wants to snipe can no longer land on the active cohort
+      await expect(campaign.connect(angel).returnFunds(u(40), 0)).to.be.revertedWithCustomError(
+        campaign,
+        "CohortNotFrozen"
+      );
+    });
+
+    it("once frozen for a safe distribution, the whale's capital is committed (cannot refund)", async () => {
+      await campaign.connect(alice).deposit(u(100));
+      await campaign.connect(whale).deposit(u(200_000));
+      // angel freezes cohort 0 (this is the only way to make returnFunds legal)
+      await campaign.connect(angel).withdraw(u(100)); // currentCohort -> 1
+      // whale is now stuck: cohort 0 is frozen, no 1:1 exit -> no risk-free round-trip
+      await expect(campaign.connect(whale).refund(u(200_000))).to.be.reverted;
+      // distribution to the now-frozen cohort is safe
+      await expect(campaign.connect(angel).returnFunds(u(40), 0)).to.emit(campaign, "FundsReturned");
+    });
+  });
+
+  // ───────────────────────── SECURITY: _update idempotency ─────────────────────────
 
   describe("security: _update idempotency", () => {
     beforeEach(async () => {
       await campaign.connect(alice).deposit(u(100));
       await campaign.connect(bob).deposit(u(300));
+      await campaign.connect(angel).withdraw(u(400)); // freeze cohort 0
       await campaign.connect(angel).returnFunds(u(40), 0); // cumulative 0.1, reserves 40
     });
 
     it("self-transfer does NOT double rewards", async () => {
-      // PoC from the audit: before the fix this credited Alice 20 instead of 10.
       await campaign
         .connect(alice)
         .safeTransferFrom(alice.address, alice.address, 0, 1, "0x");
@@ -154,7 +225,6 @@ describe("CampaignV2", () => {
         .connect(alice)
         .safeBatchTransferFrom(alice.address, bob.address, [0, 0], [1, 1], "0x");
 
-      // alice keeps the reward accrued while she held the shares; no inflation
       await expect(campaign.connect(alice).claim(0))
         .to.emit(campaign, "Claimed")
         .withArgs(alice.address, 0, u(10));
@@ -166,25 +236,25 @@ describe("CampaignV2", () => {
     });
   });
 
-  // ───────────────────────── SECURITY: reserve cap (audit #2) ─────────────────────────
+  // ───────────────────────── SECURITY: reserve cap ─────────────────────────
 
   describe("security: withdraw cannot drain reward reserves", () => {
-    beforeEach(async () => {
+    it("blocks withdraw that exceeds withdrawable principal", async () => {
       await campaign.connect(alice).deposit(u(100));
       await campaign.connect(bob).deposit(u(300));
-      await campaign.connect(angel).returnFunds(u(40), 0); // reserves 40, balance 440
-    });
-
-    it("blocks withdraw that would dip below reserves", async () => {
       await expect(campaign.connect(angel).withdraw(u(401))).to.be.revertedWithCustomError(
         campaign,
         "ExceedsWithdrawable"
       );
     });
 
-    it("allows withdrawing principal, keeps claims solvent", async () => {
+    it("allows withdrawing principal but keeps claims solvent", async () => {
+      await campaign.connect(alice).deposit(u(100));
+      await campaign.connect(bob).deposit(u(300));
       await campaign.connect(angel).withdraw(u(400)); // takes all principal, cohort -> 1
       expect(await campaign.currentCohort()).to.equal(1);
+
+      await campaign.connect(angel).returnFunds(u(40), 0); // reserves 40, balance 40
 
       // nothing left to withdraw (only reserves remain)
       await expect(campaign.connect(angel).withdraw(u(1))).to.be.revertedWithCustomError(
@@ -192,7 +262,6 @@ describe("CampaignV2", () => {
         "ExceedsWithdrawable"
       );
 
-      // claims still fully funded
       await campaign.connect(alice).claim(0);
       await campaign.connect(bob).claim(0);
       expect(await campaign.totalRewardReserves()).to.equal(0);
@@ -200,7 +269,7 @@ describe("CampaignV2", () => {
     });
   });
 
-  // ───────────────────────── returnFundsBatch (audit #3) ─────────────────────────
+  // ───────────────────────── returnFundsBatch (frozen cohorts) ─────────────────────────
 
   describe("returnFundsBatch", () => {
     beforeEach(async () => {
@@ -211,10 +280,12 @@ describe("CampaignV2", () => {
       // cohort 1: carol 200
       await campaign.connect(carol).deposit(u(200));
       await campaign.connect(angel).withdraw(u(50)); // -> cohort 2 (stays empty)
+      await campaign.connect(angel).withdraw(u(50)); // -> cohort 3 ; cohort 2 now FROZEN + empty
+      // state: cohort0(400, frozen) cohort1(200, frozen) cohort2(0, frozen) currentCohort=3
     });
 
-    it("splits proportionally across cohorts, remainder to last non-empty", async () => {
-      await campaign.connect(angel).returnFundsBatch(u(60), [0, 1, 2]);
+    it("splits proportionally across frozen cohorts, remainder to last non-empty", async () => {
+      await campaign.connect(angel).returnFundsBatch(u(60), [0, 1]);
       // c0 weight 400/600 -> 40 ; c1 remainder -> 20
       await expect(campaign.connect(alice).claim(0))
         .to.emit(campaign, "Claimed")
@@ -228,8 +299,8 @@ describe("CampaignV2", () => {
       expect(await campaign.totalRewardReserves()).to.equal(0);
     });
 
-    it("trailing empty cohort does not lose the remainder", async () => {
-      // [0, 2]: cohort 2 empty -> all 60 must go to cohort 0
+    it("trailing empty frozen cohort does not lose the remainder", async () => {
+      // [0, 2]: cohort 2 frozen+empty -> all 60 must go to cohort 0
       await campaign.connect(angel).returnFundsBatch(u(60), [0, 2]);
       await expect(campaign.connect(alice).claim(0))
         .to.emit(campaign, "Claimed")
@@ -240,10 +311,16 @@ describe("CampaignV2", () => {
       expect(await campaign.totalRewardReserves()).to.equal(0);
     });
 
-    it("reverts when every listed cohort is empty", async () => {
+    it("reverts when every listed (frozen) cohort is empty", async () => {
       await expect(
-        campaign.connect(angel).returnFundsBatch(u(10), [5, 6])
+        campaign.connect(angel).returnFundsBatch(u(10), [2])
       ).to.be.revertedWithCustomError(campaign, "EmptyCohort");
+    });
+
+    it("reverts when a listed cohort is not frozen", async () => {
+      await expect(
+        campaign.connect(angel).returnFundsBatch(u(10), [0, 3])
+      ).to.be.revertedWithCustomError(campaign, "CohortNotFrozen");
     });
   });
 
@@ -274,27 +351,7 @@ describe("CampaignV2", () => {
     it("refund is frozen after withdraw (past cohort locked)", async () => {
       await campaign.connect(alice).deposit(u(100));
       await campaign.connect(angel).withdraw(u(50)); // freezes cohort 0
-      // alice has no shares in the now-active cohort 1
       await expect(campaign.connect(alice).refund(u(10))).to.be.reverted;
-    });
-
-    it("refund preserves rewards accrued before exit; future rewards skip the exiter", async () => {
-      await campaign.connect(alice).deposit(u(100));
-      await campaign.connect(bob).deposit(u(100));
-      await campaign.connect(angel).returnFunds(u(20), 0); // each accrues 10
-
-      // alice fully exits — must keep her 10 already accrued
-      await campaign.connect(alice).refund(u(100));
-      await expect(campaign.connect(alice).claim(0))
-        .to.emit(campaign, "Claimed")
-        .withArgs(alice.address, 0, u(10));
-
-      // next distribution goes entirely to bob (alice holds 0 shares now)
-      await campaign.connect(angel).returnFunds(u(10), 0);
-      await expect(campaign.connect(bob).claim(0))
-        .to.emit(campaign, "Claimed")
-        .withArgs(bob.address, 0, u(20)); // 10 from first + 10 from second
-      expect(await campaign.totalRewardReserves()).to.equal(0);
     });
   });
 
