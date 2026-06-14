@@ -30,6 +30,7 @@ contract CampaignV2 is Initializable, ReentrancyGuard, ERC1155 {
   error DepositsArePaused();
   error AlreadyPaused();
   error NotPaused();
+  error CampaignClosed();
   error EmptyCohort();
   error ExceedsWithdrawable();
 
@@ -37,6 +38,7 @@ contract CampaignV2 is Initializable, ReentrancyGuard, ERC1155 {
   event Deposited(address indexed believer, uint256 indexed cohortId, uint256 amount);
   event Paused();
   event Resumed();
+  event Closed();
   event FundsReturned(uint256 amount, uint256 indexed cohortId);
   event Claimed(address indexed believer, uint256 indexed cohortId, uint256 amount);
   event Withdrawn(uint256 amount, uint256 newCohort);
@@ -47,6 +49,9 @@ contract CampaignV2 is Initializable, ReentrancyGuard, ERC1155 {
 
   uint256 public currentCohort;
   bool public isPaused;
+
+  /// @notice Once true, the campaign permanently rejects new deposits (one-way; see `close`).
+  bool public isClosed;
 
   /// @notice USDC currently earmarked for already-distributed rewards (returnFunds minus claims).
   /// `withdraw` can never push the contract balance below this floor.
@@ -89,6 +94,7 @@ contract CampaignV2 is Initializable, ReentrancyGuard, ERC1155 {
   /// `IERC1155Receiver.onERC1155Received` — otherwise `_mint` reverts. EOAs are unaffected.
   /// @param amount Amount of `token` to deposit (also the number of shares minted).
   function deposit(uint256 amount) external nonReentrant {
+    if (isClosed) revert CampaignClosed();
     if (isPaused) revert DepositsArePaused();
     if (amount == 0) revert ZeroAmount();
     uint256 cohortId = currentCohort;
@@ -99,15 +105,28 @@ contract CampaignV2 is Initializable, ReentrancyGuard, ERC1155 {
   }
 
   function pause() external onlyAngel {
+    if (isClosed) revert CampaignClosed();
     if (isPaused) revert AlreadyPaused();
     isPaused = true;
     emit Paused();
   }
 
   function resume() external onlyAngel {
+    if (isClosed) revert CampaignClosed();
     if (!isPaused) revert NotPaused();
     isPaused = false;
     emit Resumed();
+  }
+
+  /// @notice Permanently close the campaign to new deposits. One-way and irreversible — unlike
+  /// `pause`, a closed campaign can never reopen. Serves as a credible commitment to believers
+  /// and the premarket that the active cohort's share supply will not grow from new capital.
+  /// @dev Traps nobody: `claim`, `refund` (active cohort), `returnFunds` and `withdraw` keep
+  /// working, so existing believers can still exit 1:1 and collect rewards after close.
+  function close() external onlyAngel {
+    if (isClosed) revert CampaignClosed();
+    isClosed = true;
+    emit Closed();
   }
 
   /// @dev Settles accrued rewards for a single (account, cohort) pair and immediately syncs
