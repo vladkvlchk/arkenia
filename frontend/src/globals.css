@@ -2,7 +2,237 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  @apply bg-[#EBEBEB] text-gray-900;
-  font-family: var(--font-ibm-plex-sans), system-ui, sans-serif;
+/*
+ * Arkenia theme variables — HSL triplets consumed by tailwind.config.ts.
+ * Monochrome + editorial: warm/cool near-white paper, near-black ink, black is the
+ * action colour (--accent = ink). Three selectable palettes via [data-theme]:
+ *   ivory  — warm candlelit white (default)
+ *   marble — cool heavenly white
+ *   paper  — neutral high-contrast
+ * Each has a considered dark reverse. See DESIGN.md.
+ */
+@layer base {
+  /* ── IVORY (default, warm) ───────────────────────────────── */
+  :root,
+  [data-theme="ivory"] {
+    --bg: 40 33% 99%;
+    --surface: 0 0% 100%;
+    --surface-2: 40 22% 96.5%;
+    --ink: 40 8% 10%;
+    --ink-muted: 40 5% 32%;
+    --ink-subtle: 40 5% 48%;
+    --ink-faint: 40 6% 66%;
+    --line: 40 14% 90%;
+    --line-strong: 40 12% 82%;
+
+    /* Black is the action colour */
+    --accent: 40 8% 10%;
+    --accent-hover: 40 6% 22%;
+    --accent-soft: 40 22% 96.5%;
+    --accent-on: 40 30% 98%;
+
+    /* Reserved sacred accent — used for verified/consecrated marks only */
+    --gold: 40 60% 46%;
+    --gold-soft: 42 50% 92%;
+
+    --success: 152 35% 30%;
+    --success-soft: 152 25% 93%;
+    --warning: 36 60% 34%;
+    --warning-soft: 40 55% 92%;
+    --danger: 8 55% 42%;
+    --danger-soft: 8 50% 94%;
+    --info: 215 40% 40%;
+    --info-soft: 215 40% 94%;
+
+    --shadow-color: 40 8% 10%;
+  }
+  .dark,
+  [data-theme="ivory"].dark {
+    --bg: 40 6% 7%;
+    --surface: 40 5% 10%;
+    --surface-2: 40 5% 13.5%;
+    --ink: 40 20% 93%;
+    --ink-muted: 40 6% 66%;
+    --ink-subtle: 40 5% 52%;
+    --ink-faint: 40 5% 40%;
+    --line: 40 5% 18%;
+    --line-strong: 40 5% 26%;
+
+    --accent: 40 20% 93%;
+    --accent-hover: 40 15% 85%;
+    --accent-soft: 40 5% 13.5%;
+    --accent-on: 40 8% 8%;
+
+    --gold: 42 55% 58%;
+    --gold-soft: 42 40% 14%;
+
+    --success: 152 30% 55%;
+    --success-soft: 152 25% 14%;
+    --warning: 40 52% 58%;
+    --warning-soft: 40 35% 14%;
+    --danger: 8 58% 62%;
+    --danger-soft: 8 35% 15%;
+    --info: 215 50% 65%;
+    --info-soft: 215 35% 16%;
+
+    --shadow-color: 60 5% 2%;
+  }
+
+  /* ── MARBLE (cool) ───────────────────────────────────────── */
+  [data-theme="marble"] {
+    --bg: 216 24% 99%;
+    --surface: 0 0% 100%;
+    --surface-2: 216 20% 96.5%;
+    --ink: 216 14% 10%;
+    --ink-muted: 216 8% 32%;
+    --ink-subtle: 216 7% 48%;
+    --ink-faint: 216 9% 66%;
+    --line: 216 18% 90%;
+    --line-strong: 216 15% 82%;
+    --accent: 216 14% 10%;
+    --accent-hover: 216 10% 22%;
+    --accent-soft: 216 20% 96.5%;
+    --accent-on: 210 30% 99%;
+    --gold: 40 58% 46%;
+    --gold-soft: 42 46% 92%;
+    --success: 158 36% 30%;
+    --success-soft: 158 26% 93%;
+    --warning: 32 58% 34%;
+    --warning-soft: 36 52% 92%;
+    --danger: 4 56% 44%;
+    --danger-soft: 6 50% 94%;
+    --info: 214 46% 42%;
+    --info-soft: 214 42% 94%;
+    --shadow-color: 216 14% 10%;
+  }
+  [data-theme="marble"].dark {
+    --bg: 216 14% 7%;
+    --surface: 216 12% 10%;
+    --surface-2: 216 11% 13.5%;
+    --ink: 216 22% 93%;
+    --ink-muted: 216 9% 66%;
+    --ink-subtle: 216 8% 52%;
+    --ink-faint: 216 8% 40%;
+    --line: 216 9% 19%;
+    --line-strong: 216 9% 27%;
+    --accent: 216 22% 93%;
+    --accent-hover: 216 16% 85%;
+    --accent-soft: 216 11% 13.5%;
+    --accent-on: 216 14% 8%;
+    --gold: 42 55% 58%;
+    --gold-soft: 42 40% 14%;
+    --success: 158 32% 56%;
+    --success-soft: 158 26% 14%;
+    --warning: 38 52% 58%;
+    --warning-soft: 38 34% 14%;
+    --danger: 6 58% 63%;
+    --danger-soft: 6 34% 15%;
+    --info: 214 52% 66%;
+    --info-soft: 214 34% 16%;
+    --shadow-color: 216 20% 2%;
+  }
+
+  /* ── PAPER (neutral, high-contrast) ──────────────────────── */
+  [data-theme="paper"] {
+    --bg: 0 0% 100%;
+    --surface: 0 0% 100%;
+    --surface-2: 0 0% 96%;
+    --ink: 0 0% 8%;
+    --ink-muted: 0 0% 32%;
+    --ink-subtle: 0 0% 46%;
+    --ink-faint: 0 0% 64%;
+    --line: 0 0% 90%;
+    --line-strong: 0 0% 80%;
+    --accent: 0 0% 8%;
+    --accent-hover: 0 0% 20%;
+    --accent-soft: 0 0% 96%;
+    --accent-on: 0 0% 100%;
+    --gold: 40 58% 46%;
+    --gold-soft: 42 46% 92%;
+    --success: 150 40% 28%;
+    --success-soft: 150 28% 93%;
+    --warning: 34 62% 33%;
+    --warning-soft: 38 54% 92%;
+    --danger: 6 60% 42%;
+    --danger-soft: 6 52% 94%;
+    --info: 214 48% 40%;
+    --info-soft: 214 44% 94%;
+    --shadow-color: 0 0% 8%;
+  }
+  [data-theme="paper"].dark {
+    --bg: 0 0% 6%;
+    --surface: 0 0% 9%;
+    --surface-2: 0 0% 13%;
+    --ink: 0 0% 94%;
+    --ink-muted: 0 0% 64%;
+    --ink-subtle: 0 0% 50%;
+    --ink-faint: 0 0% 38%;
+    --line: 0 0% 17%;
+    --line-strong: 0 0% 25%;
+    --accent: 0 0% 94%;
+    --accent-hover: 0 0% 84%;
+    --accent-soft: 0 0% 13%;
+    --accent-on: 0 0% 8%;
+    --gold: 42 55% 58%;
+    --gold-soft: 42 40% 14%;
+    --success: 150 34% 56%;
+    --success-soft: 150 26% 14%;
+    --warning: 38 52% 58%;
+    --warning-soft: 38 34% 14%;
+    --danger: 6 58% 63%;
+    --danger-soft: 6 34% 15%;
+    --info: 214 52% 66%;
+    --info-soft: 214 34% 16%;
+    --shadow-color: 0 0% 0%;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-bg text-ink;
+    font-family: var(--font-hanken), system-ui, sans-serif;
+    /* Trust cue: every numeral in the product is tabular */
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Editorial headlines are serif (the manuscript voice); card titles stay sans. */
+  h1,
+  h2 {
+    font-family: var(--font-baskervville), Georgia, serif;
+    letter-spacing: -0.01em;
+  }
+
+  ::selection {
+    @apply bg-accent text-accent-on;
+  }
+
+  /* Consistent, always-visible keyboard focus */
+  :focus-visible {
+    outline: 2px solid hsl(var(--accent));
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+}
+
+@layer components {
+  /* Technical overline label — section eyebrows, table headers, stat labels */
+  .t-overline {
+    @apply font-mono text-2xs font-medium uppercase tracking-[0.08em] text-ink-subtle;
+  }
+}
+
+/* Motion is an enhancement, never a requirement */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
