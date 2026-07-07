@@ -368,6 +368,11 @@ contract CampaignV3 {
 
   function _moveShares(uint256 n, address fromAddr, address toAddr, uint256 amount) internal {
     if (n == 0 || n > currentCohort) revert UnknownCohort();
+    // Self-move is a no-op on balances but would call `_realizeReward(user, n)` twice against the
+    // same debt slot before any `_resyncDebt`, double-crediting the user's pending reward and
+    // letting them drain `rewardReserves` from honest holders. `fillOrder` already blocks self-fill;
+    // this closes the same hole for the direct `transferShares` path.
+    if (fromAddr == toAddr) revert SelfFill();
     _settle(fromAddr);
     _settle(toAddr);
     _realizeReward(fromAddr, n);
