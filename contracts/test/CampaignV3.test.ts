@@ -115,6 +115,9 @@ describe("CampaignV3", () => {
       await campaign.connect(alice).deposit(u(100));
       await campaign.connect(bob).deposit(u(100));
       await campaign.connect(angel).withdraw(u(100)); // f = 0.5 -> C1 total 100
+      // makers must be settled up to head before their orders are fillable
+      await campaign.settleTo(alice.address, 1);
+      await campaign.settleTo(bob.address, 1);
     });
 
     it("fills a signed SELL order (partial fills + overfill guard)", async () => {
@@ -229,6 +232,84 @@ describe("CampaignV3", () => {
         ((await before(alice)) - a0) + ((await before(bob)) - b0) + ((await before(carol)) - c0);
       expect(paid).to.equal(u(200));
       expect(await campaign.rewardReserves()).to.equal(0);
+    });
+
+    it("rejects self-fill and unsettled-maker orders", async () => {
+      const order = {
+        maker: alice.address, isSell: true, cohortId: 1n,
+        shareAmount: u(10), usdcAmount: u(10), nonce: 9n, deadline: BigInt(2_000_000_000),
+      };
+      const sig = await signOrder(alice, order);
+      // self-fill blocked
+      await expect(campaign.connect(alice).fillOrder(order, sig, u(1))).to.be.revertedWithCustomError(
+        campaign, "SelfFill"
+      );
+      // a fresh withdrawal desyncs the maker; order not fillable until she re-settles
+      await campaign.connect(carol).deposit(u(100));
+      await campaign.connect(angel).withdraw(u(50)); // currentCohort -> 2, alice now behind
+      await expect(campaign.connect(bob).fillOrder(order, sig, u(1))).to.be.revertedWithCustomError(
+        campaign, "MakerNotSettled"
+      );
+      await campaign.settleTo(alice.address, 2);
+      await expect(campaign.connect(bob).fillOrder(order, sig, u(1))).to.emit(campaign, "OrderFilled");
+    });
+
+    it("bulk-cancel via invalidateOrdersBelow", async () => {
+      const order = {
+        maker: alice.address, isSell: true, cohortId: 1n,
+        shareAmount: u(10), usdcAmount: u(10), nonce: 5n, deadline: BigInt(2_000_000_000),
+      };
+      const sig = await signOrder(alice, order);
+      await campaign.connect(alice).invalidateOrdersBelow(6); // kills nonce < 6
+      await expect(campaign.connect(bob).fillOrder(order, sig, u(1))).to.be.revertedWithCustomError(
+        campaign, "OrderInactive"
+      );
+    });
+  });
+
+  // ───────────────────────── hardening ─────────────────────────
+
+  describe("hardening", () => {
+    it("rejects dust withdrawals that would spam cohorts", async () => {
+      await campaign.connect(alice).deposit(u(5000)); // pool 5000; 0.01% = 0.5
+      await expect(campaign.connect(angel).withdraw(u("0.4"))).to.be.revertedWithCustomError(
+        campaign, "DustWithdraw"
+      );
+      await expect(campaign.connect(angel).withdraw(u("0.5"))).to.emit(campaign, "Withdrawn");
+    });
+
+    it("settleTo lets a backlogged user catch up in bounded chunks", async () => {
+      await campaign.connect(alice).deposit(u(5000));
+      // create several cohorts while alice is dormant
+      for (let i = 0; i < 6; i++) await campaign.connect(angel).withdraw(u(100));
+      expect(await campaign.currentCohort()).to.equal(6);
+      expect(await campaign.settledUpTo(alice.address)).to.equal(0);
+
+      // catch up in two chunks of 3
+      await campaign.settleTo(alice.address, 3);
+      expect(await campaign.settledUpTo(alice.address)).to.equal(3);
+      await campaign.settleTo(alice.address, 6);
+      expect(await campaign.settledUpTo(alice.address)).to.equal(6);
+
+      // shares across all cohorts are materialised and refund still works
+      let totalShares = 0n;
+      for (let n = 1; n <= 6; n++) totalShares += await campaign.cohortSharesOf(alice.address, n);
+      expect(totalShares).to.be.greaterThan(0n);
+      await expect(campaign.connect(alice).refund(await campaign.refundableOf(alice.address))).to.emit(
+        campaign, "Refunded"
+      );
+    });
+
+    it("token must be a contract", async () => {
+      const impl = await (await ethers.getContractFactory("CampaignV3")).deploy();
+      const f = (await (await ethers.getContractFactory("CampaignV3Factory")).deploy(
+        await impl.getAddress()
+      )) as unknown as CampaignV3Factory;
+      await f.setToken(alice.address, true); // EOA "token"
+      await expect(f.connect(angel).createCampaign(alice.address)).to.be.revertedWithCustomError(
+        await ethers.getContractAt("CampaignV3", await impl.getAddress()),
+        "TokenNotContract"
+      );
     });
   });
 });
