@@ -63,6 +63,10 @@ contract CampaignV3 {
   error BadSignature();
   error Overfill();
   error NotMaker();
+  error DustWithdraw();
+  error MakerNotSettled();
+  error SelfFill();
+  error TokenNotContract();
 
   // ─────────────────────────── events ───────────────────────────
   event Initialized(address indexed angel, address indexed token);
@@ -75,6 +79,8 @@ contract CampaignV3 {
   event SharesTransferred(uint256 indexed cohortId, address indexed from, address indexed to, uint256 amount);
   event OrderFilled(bytes32 indexed orderHash, address indexed maker, address indexed taker, uint256 cohortId, uint256 shares, uint256 usdc, bool makerIsSeller);
   event OrderCancelled(bytes32 indexed orderHash, address indexed maker);
+  event OrdersInvalidated(address indexed maker, uint256 minValidNonce);
+  event Settled(address indexed user, uint256 uptoCohort);
 
   // ─────────────────────────── config ───────────────────────────
   address public angel;
@@ -117,6 +123,12 @@ contract CampaignV3 {
   }
   mapping(bytes32 => uint256) public orderFilled;   // shares filled per order hash
   mapping(bytes32 => bool) public orderCancelled;
+  /// @notice Orders with nonce < this are invalid — lets a maker bulk-cancel all outstanding orders.
+  mapping(address => uint256) public minValidNonce;
+
+  /// @notice Max cohorts realised per `settleTo` chunk isn't fixed; callers pick the range.
+  /// A withdrawal must take at least this fraction (1/BPS) of the pool, bounding cohort growth.
+  uint256 private constant MIN_WITHDRAW_BPS = 10_000; // 0.01% of pool
 
   // ─────────────────────────── modifiers ───────────────────────────
   modifier onlyAngel() {
@@ -139,6 +151,9 @@ contract CampaignV3 {
   function initialize(address _angel, address _token) external {
     if (_initialized) revert AlreadyInitialized();
     if (_angel == address(0) || _token == address(0)) revert ZeroAddress();
+    uint256 codeSize;
+    assembly { codeSize := extcodesize(_token) }
+    if (codeSize == 0) revert TokenNotContract(); // guards against a misconfigured EOA token
     _initialized = true;
     angel = _angel;
     token = IERC20(_token);
@@ -169,8 +184,11 @@ contract CampaignV3 {
     if (amount == 0) revert ZeroAmount();
     _settle(msg.sender);
     if (amount > _poolBalance[msg.sender]) revert InsufficientRefund();
+    // Per-cohort flooring can leave Σ balances a few base units above poolTotal (sub-cent).
+    // Clamp so the last refunder never reverts; the tiny residue stays as unrefundable dust.
+    if (amount > poolTotal) amount = poolTotal;
     _poolBalance[msg.sender] -= amount;
-    poolTotal -= amount;                 // underflow-reverts: refunds can never exceed pool USDC
+    poolTotal -= amount;
     _push(msg.sender, amount);
     emit Refunded(msg.sender, amount);
   }
@@ -183,10 +201,14 @@ contract CampaignV3 {
       _realizeReward(msg.sender, n);
       _resyncDebt(msg.sender, n);
     }
+    // Clamp to reserves: cross-cohort conversion dust can make Σ owed exceed Σ returned by a few
+    // base units; without this the last claimant would revert. Unpaid remainder stays claimable
+    // once the angel returns more funds. Solvency preserved either way.
     uint256 owed = _accruedReward[msg.sender];
+    if (owed > rewardReserves) owed = rewardReserves;
     if (owed == 0) revert ZeroAmount();
-    _accruedReward[msg.sender] = 0;
-    rewardReserves -= owed;              // underflow-reverts: claims can never exceed reserves
+    _accruedReward[msg.sender] -= owed;
+    rewardReserves -= owed;
     _push(msg.sender, owed);
     emit Claimed(msg.sender, owed);
   }
@@ -204,6 +226,9 @@ contract CampaignV3 {
     if (amount == 0) revert ZeroAmount();
     uint256 pool = poolTotal;
     if (amount > pool) revert InsufficientPool();
+    // Each withdrawal mints a cohort; require a meaningful slice (>= 0.01% of pool) so the angel
+    // cannot spam thousands of dust cohorts to inflate everyone's settle cost past the gas limit.
+    if (amount * MIN_WITHDRAW_BPS < pool) revert DustWithdraw();
 
     uint256 n = ++currentCohort;
     uint256 f = amount * RAY / pool;
@@ -251,21 +276,30 @@ contract CampaignV3 {
   /// USDC moves peer-to-peer; both sides must have approved this contract for USDC.
   function fillOrder(Order calldata o, bytes calldata signature, uint256 fillShares) external nonReentrant {
     if (fillShares == 0) revert ZeroAmount();
+    if (msg.sender == o.maker) revert SelfFill();               // no wash-trading own orders
     if (block.timestamp > o.deadline) revert OrderExpired();
     if (o.cohortId == 0 || o.cohortId > currentCohort) revert UnknownCohort();
+    if (o.nonce < minValidNonce[o.maker]) revert OrderInactive(); // bulk-cancelled
+    // Maker must be settled up to head so the taker never pays for the maker's settle backlog
+    // (and so the maker's cohort shares are materialised). Taker settles itself in `_moveShares`.
+    if (settledUpTo[o.maker] != currentCohort) revert MakerNotSettled();
 
     bytes32 h = hashOrder(o);
     if (orderCancelled[h]) revert OrderInactive();
     uint256 filled = orderFilled[h];
-    if (filled + fillShares > o.shareAmount) revert Overfill();
+    uint256 newFilled = filled + fillShares;
+    if (newFilled > o.shareAmount) revert Overfill();
     if (!_validSig(o.maker, h, signature)) revert BadSignature();
 
-    orderFilled[h] = filled + fillShares;
+    orderFilled[h] = newFilled;
 
-    // maker-protective rounding: seller never receives less-than-rate; buyer never pays more-than-rate
+    // Running-total settlement so ANY partition of fills sums to exactly the order's rate
+    // (per-fill rounding would otherwise be super/sub-additive and leak dust across splits).
+    // Sell: ceil (maker-protective); Buy: floor (maker-protective).
     uint256 usdc = o.isSell
-      ? _ceilDiv(fillShares * o.usdcAmount, o.shareAmount)
-      : (fillShares * o.usdcAmount) / o.shareAmount;
+      ? _ceilDiv(newFilled * o.usdcAmount, o.shareAmount) - _ceilDiv(filled * o.usdcAmount, o.shareAmount)
+      : (newFilled * o.usdcAmount) / o.shareAmount - (filled * o.usdcAmount) / o.shareAmount;
+    if (usdc == 0) revert ZeroAmount();                        // no free shares / zero-price fills
 
     if (o.isSell) {
       _moveShares(o.cohortId, o.maker, msg.sender, fillShares); // shares maker -> taker
@@ -284,27 +318,52 @@ contract CampaignV3 {
     emit OrderCancelled(h, msg.sender);
   }
 
+  /// @notice Bulk-cancel: invalidate every one of the caller's orders with nonce < `nonce`.
+  function invalidateOrdersBelow(uint256 nonce) external {
+    if (nonce > minValidNonce[msg.sender]) {
+      minValidNonce[msg.sender] = nonce;
+      emit OrdersInvalidated(msg.sender, nonce);
+    }
+  }
+
   // ═══════════════════════════ settlement internals ═══════════════════════════
 
-  function _settle(address user) internal {
+  /// @notice Realise a user's cohort shares up to (and including) `toCohort`, in a bounded range.
+  /// Anyone may call this for anyone — it only ever advances the user's checkpoint (helps them).
+  /// A user with a huge backlog whose action would exceed the block gas limit can catch up in
+  /// chunks here first; afterwards their action's internal `_settle` is a no-op. This is the
+  /// escape hatch that keeps principal/shares recoverable regardless of cohort count.
+  function settleTo(address user, uint256 toCohort) public {
     uint256 from = settledUpTo[user];
     uint256 last = currentCohort;
-    if (from == last) return;
+    if (toCohort > last) toCohort = last;
+    if (from >= toCohort) return;
 
     uint256 bal = _poolBalance[user];
-    if (bal == 0) { settledUpTo[user] = last; return; }
+    if (bal == 0) { settledUpTo[user] = last; emit Settled(user, last); return; }
 
-    for (uint256 k = from + 1; k <= last; k++) {
+    for (uint256 k = from + 1; k <= toCohort; k++) {
       uint256 conv = bal * cohortFractionRay[k] / RAY;
       if (conv != 0) {
         _cohortShares[k][user] += conv;
         _rewardDebt[k][user] += conv * globalAccAtBirthRay[k] / RAY;
         bal -= conv;
       }
-      if (bal == 0) break;
+      if (bal == 0) {
+        // remaining cohorts convert nothing — jump straight to the head
+        _poolBalance[user] = 0;
+        settledUpTo[user] = last;
+        emit Settled(user, last);
+        return;
+      }
     }
     _poolBalance[user] = bal;
-    settledUpTo[user] = last;
+    settledUpTo[user] = toCohort;
+    emit Settled(user, toCohort);
+  }
+
+  function _settle(address user) internal {
+    settleTo(user, currentCohort);
   }
 
   function _moveShares(uint256 n, address fromAddr, address toAddr, uint256 amount) internal {
@@ -364,6 +423,8 @@ contract CampaignV3 {
       bal -= bal * cohortFractionRay[k] / RAY;
       if (bal == 0) break;
     }
+    // Never report more than the pool can actually back, so `refund(refundableOf(u))` never reverts.
+    if (bal > poolTotal) bal = poolTotal;
   }
 
   function cohortSharesOf(address user, uint256 n) public view returns (uint256) {
