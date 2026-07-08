@@ -3,7 +3,6 @@ import { Baskervville, Hanken_Grotesk, IBM_Plex_Mono } from "next/font/google";
 import { Providers } from "@/components/Providers";
 import { MockWalletProvider } from "@/shared/lib/mock-wallet";
 import { ToastProvider } from "@/shared/ui";
-import { ThemePreviewSwitcher } from "@/shared/ui/theme-preview-switcher";
 import { SiteHeader, SiteFooter, TestnetBanner } from "@/widgets";
 import "@/globals.css";
 
@@ -45,7 +44,7 @@ export const viewport: Viewport = {
 };
 
 // Applies the stored (or system) theme before first paint to avoid a flash.
-const themeInitScript = `(function(){try{var p=localStorage.getItem("arkenia:palette")||"ivory";document.documentElement.setAttribute("data-theme",p);var t=localStorage.getItem("arkenia:theme");var d=t?t==="dark":matchMedia("(prefers-color-scheme: dark)").matches;document.documentElement.classList.toggle("dark",d)}catch(e){}})()`;
+const themeInitScript = `(function(){try{var m=localStorage.getItem("arkenia:theme")||"system";var d=m==="dark"||(m!=="light"&&matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.classList.toggle("dark",d)}catch(e){}})()`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -70,7 +69,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </ToastProvider>
           </MockWalletProvider>
         </Providers>
-        <ThemePreviewSwitcher />
       </body>
     </html>
   );
