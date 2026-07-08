@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Baskervville, Hanken_Grotesk, IBM_Plex_Mono } from "next/font/google";
 import { Providers } from "@/components/Providers";
-import { MockWalletProvider } from "@/shared/lib/mock-wallet";
+import { WalletProvider } from "@/shared/lib/mock-wallet";
 import { ToastProvider } from "@/shared/ui";
 import { SiteHeader, SiteFooter, TestnetBanner } from "@/widgets";
 import "@/globals.css";
@@ -58,7 +58,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <Providers>
-          <MockWalletProvider>
+          <WalletProvider>
             <ToastProvider>
               <div className="flex min-h-screen flex-col">
                 <TestnetBanner />
@@ -67,7 +67,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <SiteFooter />
               </div>
             </ToastProvider>
-          </MockWalletProvider>
+          </WalletProvider>
         </Providers>
       </body>
     </html>
