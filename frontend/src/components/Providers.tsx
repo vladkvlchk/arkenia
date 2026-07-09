@@ -5,7 +5,10 @@ import { WagmiProvider } from "@privy-io/wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { wagmiConfig, activeChain } from "@/lib/config";
 
-const queryClient = new QueryClient();
+// Polls on-chain reads so the UI reflects state a few seconds after any action.
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { refetchInterval: 10_000, staleTime: 5_000 } },
+});
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (

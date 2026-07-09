@@ -2,13 +2,15 @@
 
 import { useReadContracts } from "wagmi";
 import { formatUnits } from "viem";
-import type { Campaign, CampaignStatus } from "@/entities/campaign/types";
+import type { Campaign, CampaignStatus, Cohort } from "@/entities/campaign/types";
 import { campaignContract } from "../contracts";
 import { campaignMeta } from "../metadata";
 import { useCampaigns, useCampaignSummary, type CampaignSummary } from "./campaign";
 
 type Addr = `0x${string}`;
 const toNum = (x: bigint) => Number(formatUnits(x, 6));
+const RAY = 10n ** 27n;
+const ZERO = "0x0000000000000000000000000000000000000000" as Addr;
 
 /**
  * Builds the UI `Campaign` shape from on-chain reads + off-chain metadata.
@@ -79,9 +81,56 @@ export function useAllCampaigns() {
   return { campaigns, isLoading: loadingList || loadingData };
 }
 
-/** A single campaign in the UI shape. */
+/** A single campaign in the UI shape. Returns undefined once loaded if the address isn't a campaign. */
 export function useCampaignView(address?: Addr) {
   const { summary, isLoading } = useCampaignSummary(address);
-  const campaign = address && summary ? toCampaign(address, summary) : undefined;
+  const campaign = address && summary?.angel ? toCampaign(address, summary) : undefined;
   return { campaign, isLoading };
+}
+
+/** Per-cohort ledger for a viewer: supply, lifetime returned, your shares, your claimable. */
+export function useCohortsView(address?: Addr, user?: Addr, currentCohort = 0n) {
+  const n = Number(currentCohort);
+  const ids = Array.from({ length: n }, (_, i) => i + 1);
+  const c = address ? campaignContract(address) : undefined;
+  const viewer = user ?? ZERO;
+  const contracts = c
+    ? [
+        { ...c, functionName: "globalAccRay" },
+        ...ids.flatMap((i) => [
+          { ...c, functionName: "totalCohortShares", args: [BigInt(i)] },
+          { ...c, functionName: "cohortAccRay", args: [BigInt(i)] },
+          { ...c, functionName: "cohortSharesOf", args: [viewer, BigInt(i)] },
+          { ...c, functionName: "pendingRewardOf", args: [viewer, [BigInt(i)]] },
+        ]),
+      ]
+    : [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, isLoading } = useReadContracts({
+    query: { enabled: !!address && n > 0 },
+    contracts: contracts as any,
+  });
+  const r = data as ({ result?: unknown } | undefined)[] | undefined;
+
+  const cohorts: Cohort[] = [];
+  if (r && address) {
+    const globalAcc = (r[0]?.result as bigint) ?? 0n;
+    ids.forEach((i, k) => {
+      const b = 1 + k * 4;
+      const totalShares = (r[b]?.result as bigint) ?? 0n;
+      const cohortAcc = (r[b + 1]?.result as bigint) ?? 0n;
+      const yourShares = (r[b + 2]?.result as bigint) ?? 0n;
+      const yourClaimable = (r[b + 3]?.result as bigint) ?? 0n;
+      cohorts.push({
+        campaignAddress: address,
+        index: i,
+        formedAt: "", // TODO(onchain): from the withdraw event timestamp (indexer)
+        totalShares: toNum(totalShares),
+        returned: toNum((totalShares * (cohortAcc + globalAcc)) / RAY),
+        yourShares: toNum(yourShares),
+        yourClaimable: toNum(yourClaimable),
+      });
+    });
+  }
+  return { cohorts, isLoading };
 }
