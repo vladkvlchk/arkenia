@@ -67,9 +67,11 @@ export function useAllCampaigns() {
   if (results) {
     addresses.forEach((a, i) => {
       const b = i * 5;
+      const angel = results[b]?.result as Addr | undefined;
+      if (!angel) return; // skip entries whose reads didn't resolve (RPC hiccup / non-campaign)
       campaigns.push(
         toCampaign(a, {
-          angel: results[b]?.result as Addr,
+          angel,
           poolTotal: (results[b + 1]?.result as bigint) ?? 0n,
           currentCohort: (results[b + 2]?.result as bigint) ?? 0n,
           totalShares: (results[b + 3]?.result as bigint) ?? 0n,
