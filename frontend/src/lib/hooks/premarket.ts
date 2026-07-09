@@ -56,11 +56,12 @@ export function usePremarket(campaign: Addr) {
       signTypedDataAsync({ domain, types: ORDER_TYPES, primaryType: "Order", message: order }),
     /** Taker fills (part of) a maker's signed order. */
     fillOrder: (order: Order, signature: Addr, fillShares: bigint) =>
-      writeContractAsync({ ...c, functionName: "fillOrder", args: [order, signature, fillShares] }),
+      writeContractAsync({ ...c, functionName: "fillOrder", args: [order, signature, fillShares], chainId: activeChain.id }),
     /** Maker cancels a specific order by its exact fields. */
-    cancelOrder: (order: Order) => writeContractAsync({ ...c, functionName: "cancelOrder", args: [order] }),
+    cancelOrder: (order: Order) =>
+      writeContractAsync({ ...c, functionName: "cancelOrder", args: [order], chainId: activeChain.id }),
     /** Maker bulk-cancels every order with nonce < `nonce`. */
     invalidateOrdersBelow: (nonce: bigint) =>
-      writeContractAsync({ ...c, functionName: "invalidateOrdersBelow", args: [nonce] }),
+      writeContractAsync({ ...c, functionName: "invalidateOrdersBelow", args: [nonce], chainId: activeChain.id }),
   };
 }

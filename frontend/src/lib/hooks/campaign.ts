@@ -2,6 +2,7 @@
 
 import { useReadContract, useReadContracts, useWriteContract } from "wagmi";
 import { campaignContract, factoryContract, tokenContract } from "../contracts";
+import { activeChain } from "../config";
 
 type Addr = `0x${string}`;
 
@@ -115,39 +116,44 @@ export function useToken(user?: Addr, spender?: Addr) {
 export function useCampaignActions(campaign: Addr) {
   const { writeContractAsync, ...rest } = useWriteContract();
   const c = campaignContract(campaign);
+  // Pin every write to the target chain so the wallet is forced to switch (or the send is
+  // blocked) rather than silently transacting on whatever network it happens to be on.
+  const chainId = activeChain.id;
   return {
     ...rest,
-    deposit: (amount: bigint) => writeContractAsync({ ...c, functionName: "deposit", args: [amount] }),
-    refund: (amount: bigint) => writeContractAsync({ ...c, functionName: "refund", args: [amount] }),
-    claim: (cohortIds: bigint[]) => writeContractAsync({ ...c, functionName: "claim", args: [cohortIds] }),
+    deposit: (amount: bigint) => writeContractAsync({ ...c, functionName: "deposit", args: [amount], chainId }),
+    refund: (amount: bigint) => writeContractAsync({ ...c, functionName: "refund", args: [amount], chainId }),
+    claim: (cohortIds: bigint[]) => writeContractAsync({ ...c, functionName: "claim", args: [cohortIds], chainId }),
     settleTo: (user: Addr, toCohort: bigint) =>
-      writeContractAsync({ ...c, functionName: "settleTo", args: [user, toCohort] }),
+      writeContractAsync({ ...c, functionName: "settleTo", args: [user, toCohort], chainId }),
     // angel-only (revert for non-angel):
-    withdraw: (amount: bigint) => writeContractAsync({ ...c, functionName: "withdraw", args: [amount] }),
+    withdraw: (amount: bigint) => writeContractAsync({ ...c, functionName: "withdraw", args: [amount], chainId }),
     returnFunds: (amount: bigint, cohortId: bigint) =>
-      writeContractAsync({ ...c, functionName: "returnFunds", args: [amount, cohortId] }),
+      writeContractAsync({ ...c, functionName: "returnFunds", args: [amount, cohortId], chainId }),
     returnFundsToAll: (amount: bigint) =>
-      writeContractAsync({ ...c, functionName: "returnFundsToAll", args: [amount] }),
+      writeContractAsync({ ...c, functionName: "returnFundsToAll", args: [amount], chainId }),
   };
 }
 
 /** ERC20 approve + testnet faucet. */
 export function useTokenActions() {
   const { writeContractAsync, ...rest } = useWriteContract();
+  const chainId = activeChain.id;
   return {
     ...rest,
     approve: (spender: Addr, amount: bigint) =>
-      writeContractAsync({ ...tokenContract, functionName: "approve", args: [spender, amount] }),
-    faucet: () => writeContractAsync({ ...tokenContract, functionName: "faucet" }),
+      writeContractAsync({ ...tokenContract, functionName: "approve", args: [spender, amount], chainId }),
+    faucet: () => writeContractAsync({ ...tokenContract, functionName: "faucet", chainId }),
   };
 }
 
 /** Create a new campaign via the factory (token must be whitelisted). */
 export function useCreateCampaign() {
   const { writeContractAsync, ...rest } = useWriteContract();
+  const chainId = activeChain.id;
   return {
     ...rest,
     createCampaign: (token: Addr) =>
-      writeContractAsync({ ...factoryContract, functionName: "createCampaign", args: [token] }),
+      writeContractAsync({ ...factoryContract, functionName: "createCampaign", args: [token], chainId }),
   };
 }

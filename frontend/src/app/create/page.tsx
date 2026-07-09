@@ -16,8 +16,10 @@ import {
   Container,
   Field,
   Input,
+  inputClasses,
   useToast,
 } from "@/shared/ui";
+import { cn } from "@/shared/lib/cn";
 import { useWallet } from "@/shared/lib/mock-wallet";
 import { useCreateCampaign } from "@/lib/hooks/campaign";
 import { campaignV3FactoryAbi } from "@/lib/abi/campaignV3Factory";
@@ -37,6 +39,7 @@ export default function CreatePage() {
   const { createCampaign } = useCreateCampaign();
   const publicClient = usePublicClient();
   const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
   const [cover, setCover] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -104,6 +107,22 @@ export default function CreatePage() {
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. Atlas Deep Compute"
                 maxLength={64}
+              />
+            </Field>
+
+            <Field
+              label="Description"
+              htmlFor="campaign-desc"
+              hint="Public. One sentence on what believers are backing. Persists once the metadata service is live."
+            >
+              <textarea
+                id="campaign-desc"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={3}
+                maxLength={280}
+                placeholder="e.g. Distributed GPU cycles for open model training."
+                className={cn(inputClasses, "h-auto resize-none py-2 leading-5")}
               />
             </Field>
 
