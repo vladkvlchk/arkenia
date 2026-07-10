@@ -1,0 +1,45 @@
+{
+  "name": "backend-v3",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Arkenia V3 backend: CampaignV3 indexer, premarket order store, metadata API",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev:api": "tsx watch src/entry/api.ts",
+    "dev:indexer": "tsx watch src/entry/indexer.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start:api": "node dist/entry/api.js",
+    "start:indexer": "node dist/entry/indexer.js",
+    "migrate": "tsx src/infrastructure/db/migrate.ts",
+    "reindex": "tsx src/entry/reindex.ts",
+    "generate": "drizzle-kit generate",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.700.0",
+    "@fastify/cors": "^9.0.1",
+    "@fastify/multipart": "^8.3.0",
+    "dotenv": "^16.4.5",
+    "drizzle-orm": "^0.36.4",
+    "fastify": "^4.28.1",
+    "pg": "^8.13.1",
+    "pino": "^9.5.0",
+    "viem": "^2.21.54",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.2.14",
+    "@types/node": "^20.17.9",
+    "@types/pg": "^8.11.10",
+    "drizzle-kit": "^0.28.1",
+    "pino-pretty": "^13.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}
