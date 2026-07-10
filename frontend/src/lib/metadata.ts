@@ -32,3 +32,12 @@ export function campaignMeta(address?: string): CampaignMeta {
   const short = address ? `${address.slice(0, 6)}…${address.slice(-4)}` : "Campaign";
   return { name: `Campaign ${short}`, description: "" };
 }
+
+/**
+ * The hardcoded name for a seeded demo campaign, or undefined. These four still win over the
+ * backend until their metadata is persisted server-side (see DEPLOY.md); every other campaign
+ * takes its name from the metadata API.
+ */
+export function seedMeta(address?: string): CampaignMeta | undefined {
+  return address ? TESTNET_CAMPAIGN_METADATA[address.toLowerCase()] : undefined;
+}

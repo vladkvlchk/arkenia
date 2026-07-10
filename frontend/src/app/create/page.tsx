@@ -2,8 +2,9 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { decodeEventLog } from "viem";
-import { usePublicClient } from "wagmi";
+import { usePublicClient, useSignMessage } from "wagmi";
 import { ImagePlus, X } from "lucide-react";
 import {
   AddressChip,
@@ -23,7 +24,9 @@ import { cn } from "@/shared/lib/cn";
 import { useWallet } from "@/shared/lib/mock-wallet";
 import { useCreateCampaign } from "@/lib/hooks/campaign";
 import { campaignV3FactoryAbi } from "@/lib/abi/campaignV3Factory";
-import { TOKEN_ADDRESS, TOKEN_SYMBOL } from "@/shared/config";
+import { activeChain } from "@/lib/config";
+import { api, ApiError, buildMetadataMessage } from "@/lib/api/client";
+import { API_ENABLED, TOKEN_ADDRESS, TOKEN_SYMBOL } from "@/shared/config";
 
 // V3 creation is deliberately minimal: a campaign is (angel, token) + display metadata.
 const WHAT_HAPPENS = [
@@ -38,6 +41,8 @@ export default function CreatePage() {
   const router = useRouter();
   const { createCampaign } = useCreateCampaign();
   const publicClient = usePublicClient();
+  const { signMessageAsync } = useSignMessage();
+  const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [cover, setCover] = useState<string | null>(null);
@@ -50,6 +55,33 @@ export default function CreatePage() {
   function onCoverChange(file?: File) {
     if (!file) return;
     setCover(URL.createObjectURL(file));
+  }
+
+  /**
+   * Persist the angel-signed name/description off-chain. Best-effort: the campaign exists on-chain
+   * regardless, and the indexer can lag the create tx by a few seconds (retry on unknown_campaign).
+   */
+  async function persistMetadata(
+    campaign: `0x${string}`,
+    metaName: string,
+    metaDescription: string,
+    issuedAt: string,
+    signature: `0x${string}`
+  ) {
+    for (let i = 0; i < 8; i++) {
+      try {
+        await api.putMetadata(campaign, { name: metaName, description: metaDescription, issuedAt, signature });
+        queryClient.invalidateQueries({ queryKey: ["v3", "metadata", campaign.toLowerCase()] });
+        queryClient.invalidateQueries({ queryKey: ["v3", "campaigns"] });
+        return;
+      } catch (e) {
+        if (e instanceof ApiError && e.code === "unknown_campaign" && i < 7) {
+          await new Promise((r) => setTimeout(r, 3000));
+          continue;
+        }
+        return; // give up silently — the campaign is live, only the name isn't stored
+      }
+    }
   }
 
   async function submit() {
@@ -70,7 +102,20 @@ export default function CreatePage() {
           /* not a factory event */
         }
       }
-      // TODO(onchain): persist name/cover to a metadata backend so the campaign shows its name.
+      // Persist the name/description off-chain (angel-signed). The signature prompt is quick; the
+      // PUT itself retries in the background while the indexer catches up to the new campaign.
+      if (newAddr && API_ENABLED) {
+        try {
+          const metaName = name.trim();
+          const metaDescription = description.trim();
+          const issuedAt = new Date().toISOString();
+          const message = buildMetadataMessage(activeChain.id, newAddr, metaName, metaDescription, issuedAt);
+          const signature = await signMessageAsync({ message });
+          void persistMetadata(newAddr, metaName, metaDescription, issuedAt, signature);
+        } catch {
+          /* user declined the signature — the campaign is live, its name just isn't stored yet */
+        }
+      }
       toast({
         title: "Campaign created",
         description: name ? `"${name}" is live.` : "Your campaign is live.",

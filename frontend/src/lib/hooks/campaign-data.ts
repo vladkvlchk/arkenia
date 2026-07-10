@@ -2,10 +2,12 @@
 
 import { useReadContracts } from "wagmi";
 import { formatUnits } from "viem";
-import type { Campaign, CampaignStatus, Cohort } from "@/entities/campaign/types";
+import type { Campaign, CampaignStatus, Cohort } from "@/entities/campaign";
+import { API_ENABLED } from "@/shared/config";
 import { campaignContract } from "../contracts";
-import { campaignMeta } from "../metadata";
+import { campaignMeta, seedMeta } from "../metadata";
 import { useCampaigns, useCampaignSummary, type CampaignSummary } from "./campaign";
+import { useApiCampaigns, useApiCampaignMetadata } from "./api";
 
 type Addr = `0x${string}`;
 const toNum = (x: bigint) => Number(formatUnits(x, 6));
@@ -13,12 +15,11 @@ const RAY = 10n ** 27n;
 const ZERO = "0x0000000000000000000000000000000000000000" as Addr;
 
 /**
- * Builds the UI `Campaign` shape from on-chain reads + off-chain metadata.
- *
- * Exact from-chain: poolBalance, totalWithdrawn (== totalShares), cohortCount.
- * Derived: totalDeposited = pool + deployed; status from cohort count.
- * Proxy until the indexer lands: totalReturned uses rewardReserves (equals lifetime returned
- * until the first claim), believers = 0, createdAt = now. // TODO(onchain): indexer aggregates.
+ * Builds the UI `Campaign` shape from on-chain reads + off-chain metadata. This is the FALLBACK
+ * path — used when the indexer/API is unreachable. Exact from-chain: poolBalance, totalWithdrawn
+ * (== totalShares), cohortCount. Derived: totalDeposited = pool + deployed; totalReturned uses
+ * rewardReserves (== lifetime returned until the first claim). believers/createdAt are unknown
+ * without the indexer, so they read 0 / now until the API answers.
  */
 function toCampaign(address: Addr, s: Omit<CampaignSummary, "token">): Campaign {
   const pool = toNum(s.poolTotal);
@@ -43,8 +44,19 @@ function toCampaign(address: Addr, s: Omit<CampaignSummary, "token">): Campaign 
   };
 }
 
-/** All campaigns from the factory, enriched to the UI shape (one multicall). */
-export function useAllCampaigns() {
+/**
+ * The four seeded demo campaigns keep their hardcoded names until their metadata is persisted
+ * server-side; every other campaign takes whatever the backend stored.
+ */
+function withSeedOverride(c: Campaign): Campaign {
+  const seed = seedMeta(c.address);
+  return seed
+    ? { ...c, name: seed.name, description: seed.description, coverUrl: seed.coverUrl ?? c.coverUrl }
+    : c;
+}
+
+/** On-chain campaign list (fallback source). `enabled=false` skips the per-campaign multicall. */
+function useAllCampaignsOnchain(enabled: boolean) {
   const { campaigns: addresses, isLoading: loadingList } = useCampaigns();
   const contracts = addresses.flatMap((a) => {
     const c = campaignContract(a);
@@ -56,9 +68,9 @@ export function useAllCampaigns() {
       { ...c, functionName: "rewardReserves" },
     ];
   });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, isLoading: loadingData } = useReadContracts({
-    query: { enabled: addresses.length > 0 },
+    query: { enabled: enabled && addresses.length > 0 },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     contracts: contracts as any,
   });
   const results = data as ({ result?: unknown } | undefined)[] | undefined;
@@ -80,13 +92,42 @@ export function useAllCampaigns() {
       );
     });
   }
-  return { campaigns, isLoading: loadingList || loadingData };
+  return { campaigns, isLoading: (enabled && loadingList) || loadingData };
 }
 
-/** A single campaign in the UI shape. Returns undefined once loaded if the address isn't a campaign. */
+/**
+ * All campaigns, API-first with an on-chain fallback. The indexer answer carries real names,
+ * believer counts and creation times; the on-chain path renders instantly and covers the case
+ * where the backend is still syncing or down.
+ */
+export function useAllCampaigns() {
+  const apiQ = useApiCampaigns();
+  const apiHas = API_ENABLED && !apiQ.isError && !!apiQ.data && apiQ.data.length > 0;
+  const chain = useAllCampaignsOnchain(!apiHas);
+  if (apiHas) return { campaigns: apiQ.data!.map(withSeedOverride), isLoading: false };
+  return { campaigns: chain.campaigns, isLoading: chain.isLoading };
+}
+
+/**
+ * A single campaign for the detail page. Live figures (pool/deployed/returned) stay on-chain so
+ * they update the instant a tx confirms; name/description overlay from persisted metadata (seed
+ * names win; a real stored record beats the derived fallback).
+ */
 export function useCampaignView(address?: Addr) {
   const { summary, isLoading } = useCampaignSummary(address);
-  const campaign = address && summary?.angel ? toCampaign(address, summary) : undefined;
+  const base = address && summary?.angel ? toCampaign(address, summary) : undefined;
+  const metaQ = useApiCampaignMetadata(address);
+
+  let campaign = base;
+  if (base) {
+    const seed = seedMeta(base.address);
+    if (seed) {
+      campaign = { ...base, name: seed.name, description: seed.description, coverUrl: seed.coverUrl ?? base.coverUrl };
+    } else if (metaQ.data && new Date(metaQ.data.updatedAt).getTime() > 0) {
+      const m = metaQ.data;
+      campaign = { ...base, name: m.name, description: m.description, coverUrl: m.coverUrl ?? base.coverUrl };
+    }
+  }
   return { campaign, isLoading };
 }
 

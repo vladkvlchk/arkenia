@@ -23,6 +23,7 @@ import { CampaignMonogram, CampaignStatusBadge } from "@/entities/campaign";
 import { useWallet } from "@/shared/lib/mock-wallet";
 import { useMyPosition } from "@/lib/hooks/campaign";
 import { useCampaignView, useCohortsView } from "@/lib/hooks/campaign-data";
+import { useApiCampaignActivity } from "@/lib/hooks/api";
 import { DepositPanel } from "@/features/believer/deposit-panel";
 import { PositionCard } from "@/features/believer/position-card";
 import { CohortHoldings } from "@/features/believer/cohort-holdings";
@@ -41,6 +42,7 @@ export default function CampaignPage() {
   const currentCohort = campaign ? BigInt(campaign.cohortCount) : 0n;
   const { cohorts } = useCohortsView(address, wallet.address, currentCohort);
   const { position } = useMyPosition(address, wallet.address, currentCohort);
+  const { data: activity } = useApiCampaignActivity(address);
 
   const yourPool = position ? Number(formatUnits(position.refundable, 6)) : 0;
   const isAngel =
@@ -168,7 +170,7 @@ export default function CampaignPage() {
                 claimCohortIds={claimCohortIds}
               />
               <CohortHoldings address={address} cohorts={cohorts} />
-              <ActivityFeed items={[]} />
+              <ActivityFeed items={activity ?? []} />
             </div>
             <div className="space-y-4 lg:sticky lg:top-20">
               <DepositPanel address={address} campaignName={campaign.name} />
