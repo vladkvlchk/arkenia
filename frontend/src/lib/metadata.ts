@@ -8,19 +8,19 @@ export interface CampaignMeta {
 }
 
 export const TESTNET_CAMPAIGN_METADATA: Record<string, CampaignMeta> = {
-  "0xbfe9d8d0636d5acd171a1a223e2db161ce454ae8": {
+  "0xce9ce282137528c916a15ad5542403bff51845ca": {
     name: "Aurora Compute",
     description: "Distributed GPU cycles for open model training.",
   },
-  "0x251ab14c74ee03009a5a12ee7415808014508463": {
+  "0x011fca24bfc4aff93cb35b8bd2a74f3b3110eeba": {
     name: "Meridian Yield",
     description: "Delta-neutral basis trades across major pairs.",
   },
-  "0x6000c3721c6637161455e78c88a42411e342191d": {
+  "0x419d43acd96d73c73025999e3bbd6d4da5d155d4": {
     name: "Tessellate Labs",
     description: "On-chain simulation primitives for autonomous worlds.",
   },
-  "0x955a7388f8d1b83d930f5f8a56ab3c49e56faf38": {
+  "0xe2e9d752ce5cf3831e9a6140d0106bac198c5bad": {
     name: "Vesper Seed",
     description: "Pre-launch community round — capital not yet deployed.",
   },
