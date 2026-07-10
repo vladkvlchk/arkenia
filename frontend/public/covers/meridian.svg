@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" fill="none" preserveAspectRatio="xMidYMid slice">
+  <!-- Mock cover art: isometric lattice engraving. -->
+  <g stroke="#8A919C" stroke-width="1" stroke-opacity="0.3">
+    <path d="M-560 -40 L410 520"/>
+    <path d="M-430 -40 L540 520"/>
+    <path d="M-300 -40 L670 520"/>
+    <path d="M-170 -40 L800 520"/>
+    <path d="M-40 -40 L930 520"/>
+    <path d="M90 -40 L1060 520"/>
+    <path d="M220 -40 L1190 520"/>
+    <path d="M350 -40 L1320 520"/>
+    <path d="M480 -40 L1450 520"/>
+    <path d="M610 -40 L1580 520"/>
+    <path d="M740 -40 L1710 520"/>
+  </g>
+  <g stroke="#8A919C" stroke-width="1" stroke-opacity="0.18">
+    <path d="M1760 -40 L790 520"/>
+    <path d="M1630 -40 L660 520"/>
+    <path d="M1500 -40 L530 520"/>
+    <path d="M1370 -40 L400 520"/>
+    <path d="M1240 -40 L270 520"/>
+    <path d="M1110 -40 L140 520"/>
+    <path d="M980 -40 L10 520"/>
+    <path d="M850 -40 L-120 520"/>
+  </g>
+  <g stroke="#8A919C" fill="none">
+    <path d="M600 118 L802 240 L600 362 L398 240 Z" stroke-width="1.4" stroke-opacity="0.6"/>
+    <path d="M600 70 L882 240 L600 410 L318 240 Z" stroke-width="1" stroke-opacity="0.35"/>
+    <path d="M600 166 L722 240 L600 314 L478 240 Z" stroke-width="1" stroke-opacity="0.45"/>
+  </g>
+</svg>

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" fill="none" preserveAspectRatio="xMidYMid slice">
+  <!-- Mock cover art: completed-orbit engraving. -->
+  <g stroke="#8A919C" fill="none">
+    <circle cx="150" cy="620" r="140" stroke-width="1.2" stroke-opacity="0.55"/>
+    <circle cx="150" cy="620" r="240" stroke-width="1.1" stroke-opacity="0.45"/>
+    <circle cx="150" cy="620" r="350" stroke-width="1" stroke-opacity="0.4"/>
+    <circle cx="150" cy="620" r="470" stroke-width="1" stroke-opacity="0.34"/>
+    <circle cx="150" cy="620" r="600" stroke-width="1" stroke-opacity="0.28"/>
+    <circle cx="150" cy="620" r="740" stroke-width="1" stroke-opacity="0.22"/>
+    <circle cx="150" cy="620" r="890" stroke-width="1" stroke-opacity="0.16"/>
+    <path d="M150 620 L1170 28" stroke-width="1" stroke-opacity="0.4"/>
+  </g>
+  <circle cx="556" cy="384" r="4.5" fill="#8A919C" fill-opacity="0.75"/>
+  <circle cx="357" cy="500" r="3" fill="#8A919C" fill-opacity="0.6"/>
+  <circle cx="854" cy="211" r="3" fill="#8A919C" fill-opacity="0.5"/>
+</svg>

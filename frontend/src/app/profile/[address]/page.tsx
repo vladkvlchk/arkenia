@@ -1,11 +1,9 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { ProfileView } from "@/components/ProfileView";
+import { ProfileScreen } from "@/features/profile/profile-screen";
 
 export default function ProfilePage() {
   const params = useParams();
-  const address = params.address as string;
-
-  return <ProfileView address={address} />;
+  return <ProfileScreen address={params.address as string} />;
 }

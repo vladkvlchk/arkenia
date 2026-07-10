@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" fill="none" preserveAspectRatio="xMidYMid slice">
+  <!-- Mock cover art: contour ridge engraving. Mid-grey strokes read on both themes. -->
+  <g stroke="#8A919C" stroke-width="1.2" stroke-opacity="0.5">
+    <ellipse cx="920" cy="640" rx="90" ry="64"/>
+    <ellipse cx="918" cy="642" rx="150" ry="108"/>
+    <ellipse cx="915" cy="645" rx="212" ry="154"/>
+    <ellipse cx="912" cy="648" rx="276" ry="202"/>
+    <ellipse cx="908" cy="652" rx="342" ry="252"/>
+    <ellipse cx="904" cy="656" rx="410" ry="304"/>
+    <ellipse cx="900" cy="660" rx="480" ry="358"/>
+    <ellipse cx="896" cy="664" rx="552" ry="414"/>
+    <ellipse cx="892" cy="668" rx="626" ry="472"/>
+    <ellipse cx="888" cy="672" rx="702" ry="532"/>
+  </g>
+  <g stroke="#8A919C" stroke-width="1" stroke-opacity="0.28">
+    <path d="M0 96h520"/>
+    <path d="M0 160h472"/>
+    <path d="M0 224h420"/>
+    <path d="M0 288h360"/>
+    <path d="M0 352h292"/>
+    <path d="M0 416h216"/>
+  </g>
+  <circle cx="920" cy="640" r="3.5" fill="#8A919C" fill-opacity="0.7"/>
+</svg>

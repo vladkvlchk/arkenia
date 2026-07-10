@@ -1,136 +1,254 @@
-"use client";
+import Link from "next/link";
+import { ArrowDownLeft, ArrowLeftRight, ArrowRight, CornerDownLeft, Layers, ShieldCheck, Scale, DoorOpen } from "lucide-react";
+import { AddressChip, Badge, Button, Card, Container, NetworkPill } from "@/shared/ui";
+import { FACTORY_ADDRESS, IS_TESTNET, TOKEN_SYMBOL } from "@/shared/config";
+import { CampaignCard, MOCK_CAMPAIGNS } from "@/entities/campaign";
 
-import { useEffect, useState } from "react";
-import { useReadContract, useReadContracts } from "wagmi";
-import { FACTORY_ABI, CAMPAIGN_ABI, ERC20_ABI } from "@/lib/abi";
-import { FACTORY_ADDRESS, API_URL } from "@/lib/config";
-import { CampaignCard } from "@/components/CampaignCard";
+// TODO(onchain): replace MOCK_CAMPAIGNS preview with live factory reads.
 
-interface CampaignMeta {
-  campaign: string;
-  name: string;
-  description: string;
-  logo_url: string;
-  cover_url: string;
-  created_at: string;
-}
+const STEPS = [
+  {
+    icon: ArrowDownLeft,
+    title: "Deposit",
+    body: `Put ${TOKEN_SYMBOL} into a campaign's shared pool. Until it is deployed, refund 1:1 whenever you want.`,
+  },
+  {
+    icon: Layers,
+    title: "Cohorts",
+    body: "When the angel deploys capital, a cohort is minted and your pool balance converts pro-rata into its shares.",
+  },
+  {
+    icon: CornerDownLeft,
+    title: "Returns",
+    body: "The angel returns profit to cohorts. Your share is claimable immediately — accounted onchain, to the unit.",
+  },
+  {
+    icon: ArrowLeftRight,
+    title: "Premarket",
+    body: "Cohort shares trade on a per-cohort order book, so you can exit or increase a position before returns land.",
+  },
+];
 
-export default function HomePage() {
-  const [metaMap, setMetaMap] = useState<Map<string, CampaignMeta>>(new Map());
+const PRINCIPLES = [
+  {
+    icon: ShieldCheck,
+    title: "Refundable by default",
+    body: "Un-deployed deposits are never at risk of discretion — the contract lets you take them back 1:1.",
+  },
+  {
+    icon: Scale,
+    title: "Pro-rata, onchain accounting",
+    body: "Cohort shares and returns are computed by the contract, not a spreadsheet. Verify every figure on the explorer.",
+  },
+  {
+    icon: DoorOpen,
+    title: "Exit on your terms",
+    body: "Claim returns as they arrive, or sell cohort shares on the premarket. No lock-ups beyond deployed capital.",
+  },
+];
 
-  const { data: campaigns, isLoading: campaignsLoading } = useReadContract({
-    address: FACTORY_ADDRESS,
-    abi: FACTORY_ABI,
-    functionName: "getCampaigns",
-  });
-
-  const campaignAddresses = campaigns ?? [];
-
-  useEffect(() => {
-    fetch(`${API_URL}/api/stats/campaigns/meta`)
-      .then((r) => r.json())
-      .then((data: CampaignMeta[]) => {
-        const map = new Map<string, CampaignMeta>();
-        for (const m of data) {
-          map.set(m.campaign.toLowerCase(), m);
-        }
-        setMetaMap(map);
-      })
-      .catch(() => {});
-  }, []);
-
+export default function LandingPage() {
   return (
-    <div>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Active Campaigns</h1>
-        <p className="text-gray-500">
-          Browse fundraising campaigns. All funds held in smart contract escrow.
-        </p>
-      </div>
+    <>
+      {/* Hero */}
+      <section className="border-b border-line bg-surface">
+        <Container className="grid items-center gap-12 py-16 sm:py-20 lg:grid-cols-[1.1fr_0.9fr] lg:gap-16">
+          <div>
+            <div className="t-overline">Onchain fundraising — Base</div>
+            <h1 className="mt-4 max-w-[16ch] text-4xl font-semibold leading-[1.1] tracking-[-0.02em] text-ink sm:text-5xl">
+              Pooled angel investing, refundable until deployed.
+            </h1>
+            <p className="mt-5 max-w-[52ch] text-[15px] leading-7 text-ink-muted">
+              Believers fund a campaign&apos;s shared pool. When the angel deploys capital, deposits
+              convert pro-rata into cohort shares that earn returns — and trade on a premarket.
+              Everything else stays refundable, 1:1.
+            </p>
+            <div className="mt-8 flex flex-wrap items-center gap-3">
+              <Button size="lg" asChild>
+                <Link href="/campaigns">
+                  Explore campaigns
+                  <ArrowRight className="h-4 w-4" aria-hidden />
+                </Link>
+              </Button>
+              <Button size="lg" variant="secondary" asChild>
+                <a href="#how-it-works">How it works</a>
+              </Button>
+            </div>
+            <div className="mt-10 flex flex-wrap items-center gap-x-5 gap-y-3 text-xs text-ink-subtle">
+              <NetworkPill />
+              <span className="flex items-center gap-2">
+                Factory
+                <AddressChip address={FACTORY_ADDRESS} variant="plain" />
+              </span>
+            </div>
+          </div>
 
-      {campaignsLoading ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="rounded-xl border border-gray-200 bg-white p-5 animate-pulse">
-              <div className="w-full aspect-[3/1] rounded-lg bg-gray-200 mb-4" />
-              <div className="h-4 bg-gray-200 rounded w-2/3 mb-2" />
-              <div className="h-3 bg-gray-200 rounded w-full mb-1" />
-              <div className="h-3 bg-gray-200 rounded w-4/5" />
+          <FlowCard />
+        </Container>
+      </section>
+
+      {/* How it works */}
+      <section id="how-it-works" className="scroll-mt-20">
+        <Container className="py-16 sm:py-20">
+          <div className="t-overline">How it works</div>
+          <h2 className="mt-3 max-w-[26ch] text-2xl font-semibold tracking-[-0.01em] text-ink">
+            One pool, many cohorts, honest exits.
+          </h2>
+          <div className="mt-10 grid gap-px overflow-hidden rounded-lg border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
+            {STEPS.map((step, i) => (
+              <div key={step.title} className="bg-surface p-6">
+                <div className="flex items-center justify-between">
+                  <step.icon className="h-[18px] w-[18px] text-accent" aria-hidden />
+                  <span className="font-mono text-xs text-ink-faint">0{i + 1}</span>
+                </div>
+                <h3 className="mt-4 text-sm font-semibold text-ink">{step.title}</h3>
+                <p className="mt-2 text-[13px] leading-5 text-ink-muted">{step.body}</p>
+              </div>
+            ))}
+          </div>
+        </Container>
+      </section>
+
+      {/* Principles */}
+      <section className="border-y border-line bg-surface">
+        <Container className="grid gap-10 py-14 sm:grid-cols-3">
+          {PRINCIPLES.map((p) => (
+            <div key={p.title}>
+              <p.icon className="h-[18px] w-[18px] text-ink-muted" aria-hidden />
+              <h3 className="mt-3 text-sm font-semibold text-ink">{p.title}</h3>
+              <p className="mt-2 text-[13px] leading-5 text-ink-muted">{p.body}</p>
             </div>
           ))}
-        </div>
-      ) : campaignAddresses.length === 0 ? (
-        <div className="text-center py-16 text-gray-400">
-          <p className="text-lg">No campaigns yet.</p>
-          <p className="text-sm mt-1">Be the first to create one!</p>
-        </div>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {campaignAddresses.map((addr) => (
-            <CampaignItem
-              key={addr}
-              address={addr}
-              meta={metaMap.get(addr.toLowerCase())}
-            />
-          ))}
-        </div>
+        </Container>
+      </section>
+
+      {/* Live campaigns */}
+      <section>
+        <Container className="py-16 sm:py-20">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <div className="t-overline">Campaigns</div>
+              <h2 className="mt-3 text-2xl font-semibold tracking-[-0.01em] text-ink">
+                Open now
+              </h2>
+            </div>
+            <Link
+              href="/campaigns"
+              className="inline-flex items-center gap-1 text-[13px] font-medium text-accent transition-colors duration-150 hover:text-accent-hover"
+            >
+              View all
+              <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+            </Link>
+          </div>
+          <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {MOCK_CAMPAIGNS.filter((c) => c.status === "open")
+              .slice(0, 3)
+              .map((c) => (
+                <CampaignCard key={c.address} campaign={c} />
+              ))}
+          </div>
+        </Container>
+      </section>
+
+      {/* Closing CTA */}
+      {IS_TESTNET && (
+        <section>
+          <Container className="pb-4">
+            <Card className="flex flex-col items-start gap-5 p-8 sm:flex-row sm:items-center sm:justify-between sm:p-10">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-semibold tracking-[-0.01em] text-ink">
+                    Try it with play money.
+                  </h2>
+                  <Badge variant="warning">Testnet</Badge>
+                </div>
+                <p className="mt-2 max-w-[52ch] text-[13px] leading-5 text-ink-muted">
+                  This deployment runs on Base Sepolia with faucet {TOKEN_SYMBOL}. Same contracts,
+                  same mechanics, zero value at stake.
+                </p>
+              </div>
+              <div className="flex shrink-0 gap-3">
+                <Button variant="secondary" asChild>
+                  <Link href="/faucet">Get {TOKEN_SYMBOL}</Link>
+                </Button>
+                <Button asChild>
+                  <Link href="/campaigns">Start exploring</Link>
+                </Button>
+              </div>
+            </Card>
+          </Container>
+        </section>
       )}
-    </div>
+    </>
   );
 }
 
-function CampaignItem({
-  address,
-  meta,
-}: {
-  address: `0x${string}`;
-  meta?: CampaignMeta;
-}) {
-  const { data: results } = useReadContracts({
-    contracts: [
-      { address, abi: CAMPAIGN_ABI, functionName: "creator" },
-      { address, abi: CAMPAIGN_ABI, functionName: "floor" },
-      { address, abi: CAMPAIGN_ABI, functionName: "ceil" },
-      { address, abi: CAMPAIGN_ABI, functionName: "totalRaised" },
-      { address, abi: CAMPAIGN_ABI, functionName: "token" },
-      { address, abi: CAMPAIGN_ABI, functionName: "withdrawnAt" },
-    ],
-  });
-
-  const tokenAddress = results?.[4]?.result as `0x${string}` | undefined;
-
-  const { data: tokenResults } = useReadContracts({
-    contracts: tokenAddress
-      ? [
-          { address: tokenAddress, abi: ERC20_ABI, functionName: "symbol" },
-          { address: tokenAddress, abi: ERC20_ABI, functionName: "decimals" },
-        ]
-      : [],
-  });
-
-  if (
-    !results ||
-    results.some((r) => r.status !== "success") ||
-    !tokenResults ||
-    tokenResults.length < 2 ||
-    tokenResults.some((r) => r.status !== "success")
-  ) {
-    return <div className="rounded-xl border border-gray-200 bg-white p-5 animate-pulse h-40" />;
-  }
-
+/** Worked example with real arithmetic — the model explained in one card. */
+function FlowCard() {
   return (
-    <CampaignCard
-      address={address}
-      creator={results[0].result as string}
-      floor={results[1].result as bigint}
-      ceil={results[2].result as bigint}
-      totalRaised={results[3].result as bigint}
-      tokenSymbol={tokenResults[0]!.result as string}
-      tokenDecimals={tokenResults[1]!.result as number}
-      withdrawnAt={results[5].result as bigint}
-      name={meta?.name}
-      coverUrl={meta?.cover_url}
-      createdAt={meta?.created_at}
-    />
+    <Card className="shadow-md">
+      <div className="border-b border-line px-5 py-3.5">
+        <span className="t-overline">Worked example</span>
+      </div>
+      <ol className="px-5">
+        <FlowStep
+          step="01"
+          title="You deposit"
+          detail={`Pool holds 100 000 ${TOKEN_SYMBOL} — your share 10%`}
+          amount={`+10 000.00 ${TOKEN_SYMBOL}`}
+        />
+        <FlowStep
+          step="02"
+          title="Angel deploys 60 000 — Cohort #4 minted"
+          detail={`You receive 6 000 shares · 4 000 ${TOKEN_SYMBOL} stays refundable`}
+          amount="6 000 shares"
+        />
+        <FlowStep
+          step="03"
+          title="Angel returns 18 000 to Cohort #4"
+          detail="Distributed pro-rata to shareholders"
+          amount={`+1 800.00 ${TOKEN_SYMBOL}`}
+          accent
+        />
+        <FlowStep
+          step="04"
+          title="Claim — or trade your shares"
+          detail="Per-cohort premarket order book"
+          amount="bid 1.02 / ask 1.045"
+          last
+        />
+      </ol>
+    </Card>
+  );
+}
+
+function FlowStep({
+  step,
+  title,
+  detail,
+  amount,
+  accent,
+  last,
+}: {
+  step: string;
+  title: string;
+  detail: string;
+  amount: string;
+  accent?: boolean;
+  last?: boolean;
+}) {
+  return (
+    <li className={`flex gap-4 py-4 ${last ? "" : "border-b border-line"}`}>
+      <span className="mt-0.5 font-mono text-xs text-ink-faint">{step}</span>
+      <div className="min-w-0 flex-1">
+        <div className="text-[13px] font-medium leading-5 text-ink">{title}</div>
+        <div className="mt-0.5 text-xs leading-5 text-ink-subtle">{detail}</div>
+      </div>
+      <span
+        className={`shrink-0 self-center font-mono text-[13px] ${accent ? "font-medium text-success" : "text-ink-muted"}`}
+      >
+        {amount}
+      </span>
+    </li>
   );
 }
