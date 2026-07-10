@@ -311,5 +311,20 @@ describe("CampaignV3", () => {
         "TokenNotContract"
       );
     });
+
+    it("factory ownership transfer is two-step", async () => {
+      await factory.connect(owner).transferOwnership(alice.address);
+      expect(await factory.owner()).to.equal(owner.address); // not yet
+      expect(await factory.pendingOwner()).to.equal(alice.address);
+      await expect(factory.connect(bob).acceptOwnership()).to.be.revertedWithCustomError(
+        factory,
+        "NotPendingOwner"
+      );
+      await factory.connect(alice).acceptOwnership();
+      expect(await factory.owner()).to.equal(alice.address);
+      await expect(
+        factory.connect(owner).setToken(await usdc.getAddress(), true)
+      ).to.be.revertedWithCustomError(factory, "NotOwner");
+    });
   });
 });

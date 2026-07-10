@@ -9,15 +9,18 @@ import "./CampaignV3.sol";
 /// the minimal-proxy creation code is written inline.
 contract CampaignV3Factory {
   address public owner;
+  address public pendingOwner;
   address public immutable implementation;
   address[] public campaigns;
   mapping(address => bool) public allowedTokens;
 
   event CampaignCreated(address indexed campaign, address indexed angel, address indexed token);
   event TokenAllowed(address indexed token, bool allowed);
-  event OwnerChanged(address indexed newOwner);
+  event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);
+  event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
   error NotOwner();
+  error NotPendingOwner();
   error TokenNotAllowed();
   error ZeroAddress();
   error CloneFailed();
@@ -55,10 +58,21 @@ contract CampaignV3Factory {
     emit TokenAllowed(token, allowed);
   }
 
+  /// @notice Step 1/2: nominate a new owner. The transfer only completes when they call
+  /// `acceptOwnership`, so ownership can never be sent to a wrong or dead address by mistake.
   function transferOwnership(address newOwner) external onlyOwner {
     if (newOwner == address(0)) revert ZeroAddress();
-    owner = newOwner;
-    emit OwnerChanged(newOwner);
+    pendingOwner = newOwner;
+    emit OwnershipTransferStarted(owner, newOwner);
+  }
+
+  /// @notice Step 2/2: the nominated owner accepts and becomes the owner.
+  function acceptOwnership() external {
+    if (msg.sender != pendingOwner) revert NotPendingOwner();
+    address previous = owner;
+    owner = pendingOwner;
+    pendingOwner = address(0);
+    emit OwnershipTransferred(previous, msg.sender);
   }
 
   /// @dev Standard EIP-1167 minimal proxy deploy.
