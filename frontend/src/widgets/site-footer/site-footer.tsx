@@ -41,8 +41,9 @@ export function SiteFooter() {
         </div>
 
         <div>
-          <div className="t-overline">System</div>
+          <div className="t-overline">Company</div>
           <ul className="mt-3 space-y-2 text-[13px]">
+            <li><FooterLink href="/careers">Careers</FooterLink></li>
             <li><FooterLink href="/design">Design system</FooterLink></li>
             <li>
               <a
