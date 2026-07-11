@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+
+# One run per ref; cancel superseded runs.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contracts:
+    name: contracts · hardhat
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+      # Root install covers the npm workspaces (contracts / backend / frontend).
+      - run: npm ci
+      - run: npm run --workspace contracts compile
+      - run: npm run --workspace contracts test
+
+  frontend:
+    name: frontend · next build
+    runs-on: ubuntu-latest
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      # `next build` runs the type-check and lint; no env needed (config has mainnet defaults).
+      - run: npm run --workspace frontend build
+
+  backend-v3:
+    name: backend-v3 · build + tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend-v3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend-v3/package-lock.json
+      # Standalone package (own lockfile, not a workspace).
+      - run: npm ci
+      - run: npm run build
+      # Hermetic: PGlite in-process — no external Postgres, no network.
+      - run: npm test
