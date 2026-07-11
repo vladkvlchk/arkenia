@@ -1,37 +1,187 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { usePublicClient } from "wagmi";
 import { ArrowLeft, SearchX } from "lucide-react";
 import {
   Button,
   Card,
   Container,
   EmptyState,
+  Skeleton,
   Stat,
   Tabs,
   TabsList,
   TabsTrigger,
+  useToast,
 } from "@/shared/ui";
+import { useWallet } from "@/shared/lib/mock-wallet";
 import { fmtNum } from "@/shared/lib/format";
 import { TOKEN_SYMBOL } from "@/shared/config";
-import { CampaignMonogram, getCampaign, getCohorts } from "@/entities/campaign";
-import { getOrderBook, MOCK_OPEN_ORDERS, MOCK_TRADES } from "@/entities/market";
+import { CampaignMonogram } from "@/entities/campaign";
+import type { OpenOrder, OrderBook } from "@/entities/market";
 import { OrderBookPanel } from "@/features/premarket/order-book-panel";
 import { OrderTicket } from "@/features/premarket/order-ticket";
 import { OpenOrders } from "@/features/premarket/open-orders";
+import { MarketOrders } from "@/features/premarket/market-orders";
 import { RecentTrades } from "@/features/premarket/recent-trades";
+import { useCampaignView, useCohortsView } from "@/lib/hooks/campaign-data";
+import { useApiOrderBook } from "@/lib/hooks/api";
+import { usePremarket, type Order as SignedOrder } from "@/lib/hooks/premarket";
 
-// TODO(onchain): replace mock books/orders/trades with premarket contract + indexer reads.
+type Addr = `0x${string}`;
 
 export default function PremarketPage() {
   const params = useParams();
-  const address = params.address as string;
+  const address = (params.address as string).toLowerCase() as Addr;
+  const wallet = useWallet();
+  const { toast } = useToast();
+  const publicClient = usePublicClient();
+  const premarket = usePremarket(address);
 
-  const campaign = getCampaign(address);
-  const cohorts = getCohorts(address);
-  const [cohortIndex, setCohortIndex] = useState(cohorts.at(-1)?.index ?? 1);
+  const { campaign, isLoading: loadingCampaign } = useCampaignView(address);
+  const currentCohort = campaign?.cohortCount ?? 0;
+  const { cohorts } = useCohortsView(
+    campaign ? address : undefined,
+    wallet.address as Addr | undefined,
+    BigInt(currentCohort)
+  );
+  const [selected, setSelected] = useState<number | null>(null);
+  const cohortIndex = selected ?? Math.max(currentCohort, 1); // default to the newest cohort
+  const cohort = cohorts.find((c) => c.index === cohortIndex);
+
+  const { data: bookData } = useApiOrderBook(campaign ? address : undefined, cohortIndex);
+
+  // ── indexer-lag masking: fills/cancels land on-chain instantly but reach the
+  // backend ~15s later. Hide cancelled ids and subtract taken shares locally;
+  // masks prune themselves once the server reflects them.
+  const [cancelledIds, setCancelledIds] = useState<ReadonlySet<string>>(new Set());
+  const [takenById, setTakenById] = useState<ReadonlyMap<string, number>>(new Map());
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+
+  const liveOrders = useMemo(() => {
+    const serverOrders = bookData?.orders ?? [];
+    return serverOrders
+      .filter((o) => !cancelledIds.has(o.id))
+      .map((o) => {
+        const taken = takenById.get(o.id) ?? 0;
+        return taken > 0 ? { ...o, remaining: Math.max(0, o.remaining - taken) } : o;
+      })
+      .filter((o) => o.remaining > 0);
+  }, [bookData?.orders, cancelledIds, takenById]);
+
+  // Prune masks once the backend caught up (order gone / fill reflected).
+  const serverOrders = bookData?.orders;
+  useEffect(() => {
+    if (!serverOrders) return;
+    const ids = new Set(serverOrders.map((o) => o.id));
+    if ([...cancelledIds].some((id) => !ids.has(id))) {
+      setCancelledIds(new Set([...cancelledIds].filter((id) => ids.has(id))));
+    }
+    const next = new Map(takenById);
+    let changed = false;
+    for (const [id, taken] of takenById) {
+      const server = serverOrders.find((o) => o.id === id);
+      if (!server || server.size - server.remaining >= taken) {
+        next.delete(id);
+        changed = true;
+      }
+    }
+    if (changed) setTakenById(next);
+  }, [serverOrders]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const me = wallet.address?.toLowerCase();
+  const myOrders: OpenOrder[] = liveOrders
+    .filter((o) => o.maker.toLowerCase() === me)
+    .map((o) => ({
+      id: o.id,
+      campaignAddress: o.campaignAddress,
+      campaignName: campaign?.name ?? "",
+      cohortIndex: o.cohortIndex,
+      side: o.side,
+      price: o.price,
+      size: o.size,
+      filled: o.filled,
+      placedAt: o.placedAt,
+    }));
+  const marketOrders = liveOrders.filter((o) => o.maker.toLowerCase() !== me);
+
+  // Aggregate the masked orders into book levels so every panel agrees.
+  const book: OrderBook = useMemo(() => {
+    const levels = (side: "bid" | "ask") => {
+      const byPrice = new Map<number, number>();
+      for (const o of liveOrders) {
+        if (o.side !== side) continue;
+        byPrice.set(o.price, (byPrice.get(o.price) ?? 0) + o.remaining);
+      }
+      return [...byPrice.entries()].map(([price, size]) => ({ price, size }));
+    };
+    return {
+      campaignAddress: address,
+      cohortIndex,
+      bids: levels("bid").sort((a, b) => b.price - a.price),
+      asks: levels("ask").sort((a, b) => a.price - b.price),
+      ...(bookData?.book.lastPrice !== undefined ? { lastPrice: bookData.book.lastPrice } : {}),
+    };
+  }, [liveOrders, address, cohortIndex, bookData?.book.lastPrice]);
+
+  const trades = (bookData?.trades ?? []).map((t) => ({
+    id: t.id,
+    side: t.side,
+    price: t.price,
+    size: t.size,
+    at: t.at,
+  }));
+
+  async function cancelOrder(order: OpenOrder) {
+    const full = liveOrders.find((o) => o.id === order.id);
+    if (!full) return;
+    setCancellingId(order.id);
+    try {
+      const o = full.fill.order;
+      const struct: SignedOrder = {
+        maker: o.maker,
+        isSell: o.isSell,
+        cohortId: BigInt(o.cohortId),
+        shareAmount: BigInt(o.shareAmount),
+        usdcAmount: BigInt(o.usdcAmount),
+        nonce: BigInt(o.nonce),
+        deadline: BigInt(o.deadline),
+      };
+      const txHash = await premarket.cancelOrder(struct);
+      await publicClient?.waitForTransactionReceipt({ hash: txHash });
+      setCancelledIds(new Set([...cancelledIds, order.id]));
+      toast({
+        title: "Order cancelled",
+        description: `${order.side === "bid" ? "Bid" : "Ask"} for ${fmtNum(order.size - order.filled)} shares of Cohort #${order.cohortIndex} withdrawn on-chain.`,
+        intent: "success",
+        txHash,
+      });
+    } catch (e) {
+      toast({
+        title: "Cancel failed",
+        description:
+          (e as { shortMessage?: string }).shortMessage ??
+          (e instanceof Error ? e.message : "The transaction was rejected."),
+        intent: "danger",
+      });
+    } finally {
+      setCancellingId(null);
+    }
+  }
+
+  if (loadingCampaign) {
+    return (
+      <Container className="py-8">
+        <Skeleton className="h-4 w-40" />
+        <Skeleton className="mt-6 h-10 w-64" />
+        <Skeleton className="mt-6 h-24 w-full" />
+        <Skeleton className="mt-4 h-64 w-full" />
+      </Container>
+    );
+  }
 
   if (!campaign) {
     return (
@@ -52,13 +202,8 @@ export default function PremarketPage() {
     );
   }
 
-  const book = getOrderBook(address, cohortIndex);
-  const cohort = cohorts.find((c) => c.index === cohortIndex);
-  const bestBid = book?.bids[0]?.price;
-  const bestAsk = book?.asks[0]?.price;
-  const openOrders = MOCK_OPEN_ORDERS.filter(
-    (o) => o.campaignAddress.toLowerCase() === address.toLowerCase()
-  );
+  const bestBid = book.bids[0]?.price;
+  const bestAsk = book.asks[0]?.price;
 
   return (
     <Container className="py-8">
@@ -81,12 +226,12 @@ export default function PremarketPage() {
           </div>
         </div>
 
-        {cohorts.length > 0 && (
-          <Tabs value={String(cohortIndex)} onValueChange={(v) => setCohortIndex(Number(v))}>
+        {currentCohort > 0 && (
+          <Tabs value={String(cohortIndex)} onValueChange={(v) => setSelected(Number(v))}>
             <TabsList variant="segmented">
-              {cohorts.map((c) => (
-                <TabsTrigger key={c.index} value={String(c.index)}>
-                  Cohort #{c.index}
+              {Array.from({ length: currentCohort }, (_, i) => i + 1).map((i) => (
+                <TabsTrigger key={i} value={String(i)}>
+                  Cohort #{i}
                 </TabsTrigger>
               ))}
             </TabsList>
@@ -94,7 +239,7 @@ export default function PremarketPage() {
         )}
       </div>
 
-      {cohorts.length === 0 ? (
+      {currentCohort === 0 ? (
         <div className="mt-6 rounded-lg border border-line bg-surface">
           <EmptyState
             title="No cohorts to trade yet"
@@ -111,7 +256,7 @@ export default function PremarketPage() {
           <Card className="mt-6 grid grid-cols-2 gap-y-6 p-5 sm:grid-cols-4 sm:divide-x sm:divide-line sm:gap-y-0">
             <Stat
               label="Last price"
-              value={book?.lastPrice !== undefined ? book.lastPrice.toFixed(3) : "—"}
+              value={book.lastPrice !== undefined ? book.lastPrice.toFixed(3) : "—"}
               unit={TOKEN_SYMBOL}
               size="sm"
               className="sm:pr-6"
@@ -139,11 +284,24 @@ export default function PremarketPage() {
           <div className="mt-4 grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
             <div className="space-y-4">
               <OrderBookPanel book={book} />
-              <OpenOrders orders={openOrders} />
-              <RecentTrades trades={MOCK_TRADES} />
+              <MarketOrders
+                campaign={address}
+                orders={marketOrders}
+                yourShares={cohort?.yourShares ?? 0}
+                onFilled={(orderId, shares) =>
+                  setTakenById(new Map(takenById).set(orderId, (takenById.get(orderId) ?? 0) + shares))
+                }
+              />
+              <OpenOrders orders={myOrders} onCancel={cancelOrder} cancellingId={cancellingId} />
+              <RecentTrades trades={trades} />
             </div>
             <div className="lg:sticky lg:top-20">
-              <OrderTicket cohortIndex={cohortIndex} yourShares={cohort?.yourShares ?? 0} />
+              <OrderTicket
+                campaign={address}
+                cohortIndex={cohortIndex}
+                currentCohort={currentCohort}
+                yourShares={cohort?.yourShares ?? 0}
+              />
             </div>
           </div>
         </>

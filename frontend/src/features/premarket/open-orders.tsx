@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { ListOrdered, X } from "lucide-react";
 import {
   Badge,
@@ -15,27 +14,22 @@ import {
   Th,
   THead,
   Tr,
-  useToast,
 } from "@/shared/ui";
 import { fmtDate, fmtNum } from "@/shared/lib/format";
 import { TOKEN_SYMBOL } from "@/shared/config";
 import type { OpenOrder } from "@/entities/market";
 
+interface OpenOrdersProps {
+  orders: OpenOrder[];
+  showMarket?: boolean;
+  /** When set, rows get a cancel action (an on-chain tx — wired by the parent). */
+  onCancel?: (order: OpenOrder) => void;
+  /** Order id currently being cancelled (spinner state). */
+  cancellingId?: string | null;
+}
+
 /** The viewer's resting orders, with partial-fill progress and one-click cancel. */
-export function OpenOrders({ orders: initial, showMarket = false }: { orders: OpenOrder[]; showMarket?: boolean }) {
-  const { toast } = useToast();
-  const [orders, setOrders] = useState(initial);
-
-  function cancel(order: OpenOrder) {
-    // TODO(onchain): wire premarket cancelOrder(orderId).
-    setOrders((prev) => prev.filter((o) => o.id !== order.id));
-    toast({
-      title: "Order cancelled",
-      description: `${order.side === "bid" ? "Bid" : "Ask"} for ${fmtNum(order.size - order.filled)} shares of Cohort #${order.cohortIndex} withdrawn.`,
-      txHash: "0x5a1c9e4b6d0a3f7c3e8b5d1a9f4c6e0b3d7a7d3f2a8c5e1b9d4f6a0c3e7b2d8f",
-    });
-  }
-
+export function OpenOrders({ orders, showMarket = false, onCancel, cancellingId }: OpenOrdersProps) {
   return (
     <Card>
       <CardHeader>
@@ -59,7 +53,7 @@ export function OpenOrders({ orders: initial, showMarket = false }: { orders: Op
                 <Th numeric>Price</Th>
                 <Th numeric>Filled / size</Th>
                 <Th>Placed</Th>
-                <Th aria-label="Cancel" />
+                {onCancel && <Th aria-label="Cancel" />}
               </Tr>
             </THead>
             <TBody>
@@ -81,16 +75,19 @@ export function OpenOrders({ orders: initial, showMarket = false }: { orders: Op
                     {fmtNum(o.size)}
                   </Td>
                   <Td className="text-ink-muted">{fmtDate(o.placedAt)}</Td>
-                  <Td numeric className="py-2">
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={`Cancel ${o.side} on cohort ${o.cohortIndex}`}
-                      onClick={() => cancel(o)}
-                    >
-                      <X className="h-4 w-4" aria-hidden />
-                    </Button>
-                  </Td>
+                  {onCancel && (
+                    <Td numeric className="py-2">
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`Cancel ${o.side} on cohort ${o.cohortIndex}`}
+                        loading={cancellingId === o.id}
+                        onClick={() => onCancel(o)}
+                      >
+                        <X className="h-4 w-4" aria-hidden />
+                      </Button>
+                    </Td>
+                  )}
                 </Tr>
               ))}
             </TBody>
