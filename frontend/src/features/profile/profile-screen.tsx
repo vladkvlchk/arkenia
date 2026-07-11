@@ -30,6 +30,7 @@ import type { ActivityType } from "@/entities/campaign";
 import { OpenOrders } from "@/features/premarket/open-orders";
 import { useApiAccountActivity, useApiAccountPositions } from "@/lib/hooks/api";
 import { seedMeta } from "@/lib/metadata";
+import { useClaimAll } from "./use-claim-all";
 
 const activityBadge: Record<ActivityType, { label: string; variant: "success" | "neutral" | "info" | "accent" }> = {
   deposit: { label: "Deposit", variant: "accent" },
@@ -62,8 +63,10 @@ export function ProfileScreen({ address }: ProfileScreenProps) {
   const isSelf = !address;
   const viewedAddress = (address ?? wallet.address) as `0x${string}` | undefined;
 
-  const { data: positions = [] } = useApiAccountPositions(viewedAddress);
+  const { data: rawPositions = [] } = useApiAccountPositions(viewedAddress);
   const { data: history = [] } = useApiAccountActivity(viewedAddress);
+  // Claimed amounts are masked until the indexer reflects them, so render from these.
+  const { positions, claimAll, claiming, progress, txCount } = useClaimAll(rawPositions);
 
   if (isSelf && wallet.status !== "connected") {
     return (
@@ -132,13 +135,34 @@ export function ProfileScreen({ address }: ProfileScreenProps) {
           subtext={`Across ${cohortCount} cohorts · ${positions.length} campaigns`}
           className="sm:px-6"
         />
-        <Stat
-          label="Claimable now"
-          value={fmtNum(totalClaimable)}
-          unit={TOKEN_SYMBOL}
-          size="sm"
-          className="text-success sm:pl-6"
-        />
+        <div className="sm:pl-6">
+          <Stat
+            label="Claimable now"
+            value={fmtNum(totalClaimable)}
+            unit={TOKEN_SYMBOL}
+            size="sm"
+            className="text-success"
+          />
+          {isSelf && (
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+              <Button
+                size="sm"
+                onClick={claimAll}
+                loading={claiming}
+                disabled={totalClaimable <= 0}
+              >
+                {claiming && progress
+                  ? `Claiming ${Math.min(progress.done + 1, progress.total)}/${progress.total}…`
+                  : "Claim all"}
+              </Button>
+              {txCount > 1 && !claiming && (
+                <span className="text-xs text-ink-subtle">
+                  {txCount} transactions — one per campaign
+                </span>
+              )}
+            </div>
+          )}
+        </div>
       </Card>
 
       <Tabs defaultValue="positions" className="mt-8">
