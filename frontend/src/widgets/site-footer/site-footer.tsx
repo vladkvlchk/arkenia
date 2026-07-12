@@ -63,7 +63,11 @@ export function SiteFooter() {
         <Container className="flex flex-wrap items-center justify-between gap-3 py-4 text-xs text-ink-subtle">
           <div className="flex flex-wrap items-center gap-3">
             <span>© 2026 Arkenia</span>
-            {IS_TESTNET && <span className="font-mono">Testnet preview — no real funds involved.</span>}
+            {IS_TESTNET ? (
+              <span className="font-mono">Testnet preview — no real funds involved.</span>
+            ) : (
+              <span className="font-mono">Unaudited contracts — deposit at your own risk.</span>
+            )}
           </div>
           <ThemeSwitcher />
         </Container>

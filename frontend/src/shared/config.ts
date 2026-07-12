@@ -42,8 +42,8 @@ const API_ROOT = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002/api";
 export const API_V3_URL = `${API_ROOT.replace(/\/+$/, "")}/v3`;
 
 /**
- * Backend-backed features (persisted metadata, activity, positions, premarket book) are the
- * testnet contour; mainnet still runs the V1 app, so we never point it at /v3. Individual calls
+ * Backend-backed features (persisted metadata, activity, positions, premarket book) light up
+ * whenever an API base is configured — both contours run the V3 backend. Individual calls
  * degrade to on-chain reads / empty states when the backend is unreachable.
  */
-export const API_ENABLED = IS_TESTNET;
+export const API_ENABLED = Boolean(process.env.NEXT_PUBLIC_API_URL);
