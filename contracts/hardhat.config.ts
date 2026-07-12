@@ -27,6 +27,14 @@ const config: HardhatUserConfig = {
       accounts: process.env.DEPLOYER_KEY ? [process.env.DEPLOYER_KEY] : [],
     },
   },
+  // Basescan verification. `base`/`baseSepolia` are built into hardhat-verify; one
+  // BASESCAN_API_KEY (Etherscan V2 keys work across chains) covers both.
+  etherscan: {
+    apiKey: {
+      base: process.env.BASESCAN_API_KEY || "",
+      baseSepolia: process.env.BASESCAN_API_KEY || "",
+    },
+  },
 };
 
 export default config;
