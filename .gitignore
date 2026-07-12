@@ -6,8 +6,9 @@ cache/
 typechain-types/
 .env
 *.log
-.env.local
-.env.*.local
+# Ignore every concrete env file (.env.local, .env.mainnet, .env.testnet, …) but keep templates.
+.env.*
+!.env.*.example
 backend/uploads/
 *.tsbuildinfo
 .DS_Store
