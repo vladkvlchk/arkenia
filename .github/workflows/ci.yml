@@ -31,6 +31,9 @@ jobs:
     runs-on: ubuntu-latest
     env:
       NEXT_TELEMETRY_DISABLED: "1"
+      # Static prerender initialises the Privy provider, which rejects an empty/invalid id.
+      # Build-time only; this testnet id is already public (NEXT_PUBLIC_*, in .env.testnet.example).
+      NEXT_PUBLIC_PRIVY_APP_ID: cmrb00jhv00fg0bjs2f93tph3
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
