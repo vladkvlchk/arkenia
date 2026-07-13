@@ -24,7 +24,7 @@ export const TOKEN_ADDRESS =
     : "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913");
 
 export const FACTORY_ADDRESS =
-  process.env.NEXT_PUBLIC_FACTORY_ADDRESS || "0xC65b2eC7b07c9CffFBdb00D02475afaF449F9d28";
+  process.env.NEXT_PUBLIC_FACTORY_ADDRESS || "0x20D5728912f834aD868850cdf6678C1B32692652";
 
 export function explorerAddressUrl(address: string) {
   return `${EXPLORER_URL}/address/${address}`;

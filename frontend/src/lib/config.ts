@@ -10,7 +10,8 @@ export const isTestnet = activeChain.id === baseSepolia.id;
 
 export const FACTORY_ADDRESS =
   (process.env.NEXT_PUBLIC_FACTORY_ADDRESS as `0x${string}`) ||
-  ("0x193c63A79453edDf20B6374557414538A8c19783" as `0x${string}`);
+  // Base-mainnet CampaignV3 factory — the default when the env var is absent.
+  ("0x20D5728912f834aD868850cdf6678C1B32692652" as `0x${string}`);
 
 // Fundraising token: USDC on mainnet, TestUSDC (faucet) on testnet.
 export const TOKEN_ADDRESS =
