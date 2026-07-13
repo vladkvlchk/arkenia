@@ -2,6 +2,10 @@ import "dotenv/config";
 import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
 
+// Dedicated Base-mainnet deployer key (kept separate from the testnet DEPLOYER_KEY); 0x-normalised.
+const mainnetKey = process.env.BASE_MAINNET_DEPLOYER_PRIVATE_KEY || process.env.DEPLOYER_KEY;
+const baseAccounts = mainnetKey ? [mainnetKey.startsWith("0x") ? mainnetKey : `0x${mainnetKey}`] : [];
+
 const config: HardhatUserConfig = {
   solidity: {
     version: "0.8.24",
@@ -20,7 +24,7 @@ const config: HardhatUserConfig = {
     },
     base: {
       url: process.env.BASE_RPC_URL || "https://mainnet.base.org",
-      accounts: process.env.DEPLOYER_KEY ? [process.env.DEPLOYER_KEY] : [],
+      accounts: baseAccounts,
     },
     baseSepolia: {
       url: process.env.BASE_SEPOLIA_RPC_URL || "https://sepolia.base.org",
