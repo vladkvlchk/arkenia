@@ -9,31 +9,24 @@ export const USDC = 10n ** 6n; // 6-decimal unit
 export class FakeChainSource implements ChainSource {
   constructor(
     private readonly events: ChainEvent[],
-    private readonly headBlock: bigint
+    private readonly headBlock: bigint,
+    private readonly factory: Address
   ) {}
 
   getHead(): Promise<bigint> {
     return Promise.resolve(this.headBlock);
   }
 
-  getFactoryEvents(from: bigint, to: bigint): Promise<ChainEvent[]> {
-    return Promise.resolve(
-      this.events.filter(
-        (e) => e.name === "CampaignCreated" && e.blockNumber >= from && e.blockNumber <= to
-      )
-    );
-  }
-
-  getCampaignEvents(addresses: Address[], from: bigint, to: bigint): Promise<ChainEvent[]> {
+  getEvents(addresses: Address[], from: bigint, to: bigint): Promise<ChainEvent[]> {
     const set = new Set(addresses.map((a) => a.toLowerCase()));
     return Promise.resolve(
-      this.events.filter(
-        (e) =>
-          e.name !== "CampaignCreated" &&
-          e.blockNumber >= from &&
-          e.blockNumber <= to &&
-          set.has((e as ChainEvent & { campaign: Address }).campaign.toLowerCase())
-      )
+      this.events.filter((e) => {
+        if (e.blockNumber < from || e.blockNumber > to) return false;
+        // CampaignCreated is emitted by the factory; campaign events by their clone.
+        const emitter =
+          e.name === "CampaignCreated" ? this.factory : (e as ChainEvent & { campaign: Address }).campaign;
+        return set.has(emitter.toLowerCase());
+      })
     );
   }
 

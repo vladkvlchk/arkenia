@@ -98,10 +98,11 @@ export interface MetadataStore {
 export interface ChainSource {
   /** Latest chain head block number. */
   getHead(): Promise<bigint>;
-  /** Factory CampaignCreated events in [from, to]. */
-  getFactoryEvents(from: bigint, to: bigint): Promise<ChainEvent[]>;
-  /** All campaign events for the given clone addresses in [from, to]. */
-  getCampaignEvents(addresses: Address[], from: bigint, to: bigint): Promise<ChainEvent[]>;
+  /**
+   * Every indexed event emitted by `addresses` in [from, to] — the factory's CampaignCreated and
+   * all campaign events — in a single getLogs call. Pass [factory, ...knownCampaigns].
+   */
+  getEvents(addresses: Address[], from: bigint, to: bigint): Promise<ChainEvent[]>;
   /** Block where the factory was deployed (start of history). */
   findFactoryDeployBlock(): Promise<bigint>;
 }

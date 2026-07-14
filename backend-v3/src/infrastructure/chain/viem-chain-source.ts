@@ -38,6 +38,9 @@ const campaignCreatedEvent = campaignV3FactoryAbi.find(
   (item) => item.type === "event" && item.name === "CampaignCreated"
 ) as unknown as AbiEvent;
 
+// One heterogeneous event set for a single getLogs across the factory + campaign clones.
+const allEvents: AbiEvent[] = [campaignCreatedEvent, ...campaignEvents];
+
 export function createViemClient(rpcUrl: string): PublicClient {
   return createPublicClient({ transport: http(rpcUrl, { batch: true }) });
 }
@@ -55,20 +58,12 @@ export class ViemChainSource implements ChainSource {
     return this.client.getBlockNumber();
   }
 
-  async getFactoryEvents(from: bigint, to: bigint): Promise<ChainEvent[]> {
-    const logs = await this.client.getLogs({
-      address: this.factory,
-      event: campaignCreatedEvent,
-      fromBlock: from,
-      toBlock: to,
-    });
-    return this.normalize(logs);
-  }
-
-  async getCampaignEvents(addresses: Address[], from: bigint, to: bigint): Promise<ChainEvent[]> {
+  /** One getLogs across the factory + campaign clones — CampaignCreated and every campaign event. */
+  async getEvents(addresses: Address[], from: bigint, to: bigint): Promise<ChainEvent[]> {
+    if (addresses.length === 0) return [];
     const logs = await this.client.getLogs({
       address: addresses,
-      events: campaignEvents,
+      events: allEvents,
       fromBlock: from,
       toBlock: to,
     });

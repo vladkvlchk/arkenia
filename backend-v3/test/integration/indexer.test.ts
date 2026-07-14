@@ -82,7 +82,7 @@ describe("indexer lifecycle projection", () => {
     store = new DrizzleProjectionStore(db);
     const script = lifecycleScript();
     sync = new ChainSync(
-      new FakeChainSource(script.events, script.headBlock),
+      new FakeChainSource(script.events, script.headBlock, addr(0xfa)),
       new DrizzleUnitOfWork(db),
       { chainId: CHAIN_ID, factoryAddress: addr(0xfa), confirmations: 0, blockRange: 3, startBlock: 1n },
       silent
@@ -188,7 +188,7 @@ describe("premarket event projection", () => {
       s.nextBlock().emit({ name: "OrdersInvalidated", campaign: CAMPAIGN, maker: A, minValidNonce: 4n });
 
       const sync = new ChainSync(
-        new FakeChainSource(s.events, s.headBlock),
+        new FakeChainSource(s.events, s.headBlock, addr(0xfa)),
         new DrizzleUnitOfWork(db),
         { chainId: CHAIN_ID, factoryAddress: addr(0xfa), confirmations: 0, blockRange: 10, startBlock: 1n },
         silent

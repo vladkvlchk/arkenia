@@ -62,31 +62,47 @@ export class ChainSync {
 
     const to = from + BigInt(this.cfg.blockRange - 1) > head ? head : from + BigInt(this.cfg.blockRange - 1);
 
-    const factoryEvents = await this.chain.getFactoryEvents(from, to);
+    // One getLogs across the factory + every known campaign.
     const known = await this.uow.withTransaction((s) => s.listCampaignAddresses(this.cfg.chainId));
-    const created = factoryEvents.filter((e) => e.name === "CampaignCreated");
-    const addresses = [
-      ...new Set([...known, ...created.map((e) => (e as ChainEvent & { campaign: Address }).campaign)]),
-    ];
-    const campaignEvents = addresses.length > 0 ? await this.chain.getCampaignEvents(addresses, from, to) : [];
+    const firstPass = await this.chain.getEvents([this.cfg.factoryAddress, ...known], from, to);
 
-    const events = [...factoryEvents, ...campaignEvents].sort((a, b) => {
-      if (a.blockNumber !== b.blockNumber) return a.blockNumber < b.blockNumber ? -1 : 1;
-      return a.logIndex - b.logIndex;
-    });
+    // A campaign created *inside this range* wasn't in `known`, so its same-range events were missed
+    // above. Fetch just those clones — a second call only on the rare range that contains a creation.
+    const knownSet = new Set(known.map((a) => a.toLowerCase()));
+    const freshCampaigns = firstPass
+      .filter((e): e is Extract<ChainEvent, { name: "CampaignCreated" }> => e.name === "CampaignCreated")
+      .map((e) => e.campaign)
+      .filter((c) => !knownSet.has(c.toLowerCase()));
+    const secondPass =
+      freshCampaigns.length > 0 ? await this.chain.getEvents(freshCampaigns, from, to) : [];
+
+    // Merge, dedupe by (txHash, logIndex), and replay in (block, logIndex) order.
+    const seen = new Set<string>();
+    const events = [...firstPass, ...secondPass]
+      .filter((e) => {
+        const key = `${e.txHash}:${e.logIndex}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .sort((a, b) =>
+        a.blockNumber !== b.blockNumber ? (a.blockNumber < b.blockNumber ? -1 : 1) : a.logIndex - b.logIndex
+      );
+
+    const newCampaigns = events.filter((e) => e.name === "CampaignCreated").length;
 
     let applied = 0;
     await this.uow.withTransaction(async (store) => {
       for (const event of events) {
-        const fresh = await store.insertEventOnce(event);
-        if (!fresh) continue;
+        const isFresh = await store.insertEventOnce(event);
+        if (!isFresh) continue;
         await this.apply(store, event);
         applied++;
       }
       await store.setCursor(this.cfg.chainId, to);
     });
 
-    return { fromBlock: from, toBlock: to, events: applied, newCampaigns: created.length };
+    return { fromBlock: from, toBlock: to, events: applied, newCampaigns };
   }
 
   /** Poll forever (pm2 worker entrypoint). */
