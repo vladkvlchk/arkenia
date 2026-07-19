@@ -16,3 +16,4 @@ backend/uploads/
 ignition/deployments/
 todo.md
 **/todo.md
+.vercel
