@@ -2,9 +2,7 @@ import Link from "next/link";
 import { ArrowDownLeft, ArrowLeftRight, ArrowRight, CornerDownLeft, Layers, ShieldCheck, Scale, DoorOpen } from "lucide-react";
 import { AddressChip, Badge, Button, Card, Container, NetworkPill } from "@/shared/ui";
 import { FACTORY_ADDRESS, IS_TESTNET, TOKEN_SYMBOL } from "@/shared/config";
-import { CampaignCard, MOCK_CAMPAIGNS } from "@/entities/campaign";
-
-// TODO(onchain): replace MOCK_CAMPAIGNS preview with live factory reads.
+import { FeaturedCampaigns } from "@/widgets/featured-campaigns/featured-campaigns";
 
 const STEPS = [
   {
@@ -140,13 +138,7 @@ export default function LandingPage() {
               <ArrowRight className="h-3.5 w-3.5" aria-hidden />
             </Link>
           </div>
-          <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {MOCK_CAMPAIGNS.filter((c) => c.status === "open")
-              .slice(0, 3)
-              .map((c) => (
-                <CampaignCard key={c.address} campaign={c} />
-              ))}
-          </div>
+          <FeaturedCampaigns />
         </Container>
       </section>
 
