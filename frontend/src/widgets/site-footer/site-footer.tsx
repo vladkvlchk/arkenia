@@ -68,6 +68,12 @@ export function SiteFooter() {
             ) : (
               <span className="font-mono">Unaudited contracts — deposit at your own risk.</span>
             )}
+            <a
+              href={IS_TESTNET ? "https://arkenia.xyz" : "https://testnet.arkenia.xyz"}
+              className="font-medium underline underline-offset-2 transition-colors duration-150 hover:text-ink"
+            >
+              {IS_TESTNET ? "Mainnet ↗" : "Testnet ↗"}
+            </a>
           </div>
           <ThemeSwitcher />
         </Container>
