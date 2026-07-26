@@ -97,9 +97,14 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  // FormData carries its own multipart boundary — never force a JSON content-type over it.
+  const isForm = typeof FormData !== "undefined" && init?.body instanceof FormData;
   const res = await fetch(`${API_V3_URL}${path}`, {
     ...init,
-    headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
+    headers: {
+      ...(isForm ? {} : { "content-type": "application/json" }),
+      ...(init?.headers ?? {}),
+    },
   });
   let body: unknown = null;
   try {
@@ -166,10 +171,26 @@ export const api = {
     }).then((r) => r.order),
   putMetadata: (
     address: Addr,
-    body: { name: string; description: string; issuedAt: string; signature: Addr }
-  ) =>
-    request<{ metadata: CampaignMetadataDto }>(`/campaigns/${address}/metadata`, {
-      method: "PUT",
-      body: JSON.stringify(body),
-    }).then((r) => r.metadata),
+    body: { name: string; description: string; issuedAt: string; signature: Addr },
+    cover?: Blob
+  ) => {
+    // With a cover we must use multipart/form-data — the backend reads the `cover` file part;
+    // without one, the lighter JSON path. Field names/casing mirror the backend `putBody` schema.
+    let init: RequestInit;
+    if (cover) {
+      const form = new FormData();
+      form.set("name", body.name);
+      form.set("description", body.description);
+      form.set("issuedAt", body.issuedAt);
+      form.set("signature", body.signature);
+      form.set("cover", cover);
+      init = { method: "PUT", body: form };
+    } else {
+      init = { method: "PUT", body: JSON.stringify(body) };
+    }
+    return request<{ metadata: CampaignMetadataDto }>(
+      `/campaigns/${address}/metadata`,
+      init
+    ).then((r) => r.metadata);
+  },
 };
