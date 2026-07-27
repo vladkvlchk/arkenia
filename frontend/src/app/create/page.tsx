@@ -35,8 +35,8 @@ const WHAT_HAPPENS = [
   { title: "Each deployment mints a cohort", body: "Depositors receive pro-rata shares; every return you post is distributed by the contract." },
 ];
 
-// Cover-storage failures we recover from by saving the name alone (the image is optional).
-const COVER_SOFT_FAILURES = new Set(["storage_unconfigured", "unsupported_cover_type", "cover_too_large"]);
+// Cover images are optional and size-capped; the fundraiser name must never be lost to one.
+const MAX_COVER_BYTES = 5 * 1024 * 1024; // mirrors the backend limit
 
 /** Human-readable reason for a failed metadata write, keyed by the backend error code. */
 function metadataErrorMessage(code: string): string {
@@ -76,6 +76,14 @@ export default function CreatePage() {
 
   function onCoverChange(file?: File) {
     if (!file) return;
+    if (file.size > MAX_COVER_BYTES) {
+      toast({
+        title: "Image too large",
+        description: "Cover images must be under 5 MB — please pick a smaller one.",
+        intent: "danger",
+      });
+      return;
+    }
     setCoverFile(file); // keep the actual File — it's what gets uploaded
     setCover(URL.createObjectURL(file)); // object URL is preview-only
   }
@@ -122,8 +130,10 @@ export default function CreatePage() {
         return;
       } catch (e) {
         lastCode = e instanceof ApiError ? e.code : "network_error";
-        // A cover-only failure shouldn't cost the name — retry once without the image.
-        if (!dropCover && file && COVER_SOFT_FAILURES.has(lastCode)) {
+        // A cover problem must never cost the name — drop the image and retry name-only
+        // (too large, a 413 at the proxy, R2 down, wrong type…). `unknown_campaign` is the one
+        // exception, handled just below: that's indexer lag, so we keep retrying WITH the cover.
+        if (!dropCover && file && lastCode !== "unknown_campaign") {
           dropCover = true;
           continue;
         }
