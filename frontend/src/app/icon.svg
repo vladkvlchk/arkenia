@@ -1,0 +1,22 @@
+<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Arkenia">
+  <!--
+    Arkenia mark — the brand's black primary button as a monogram.
+    A Roman archway whose two piers + crossbar also read as an "A".
+    Theme-adaptive (mirrors {button.primary}: ink tile / paper mark in light,
+    near-white tile / ink mark in dark). Monochrome by design; the reserved
+    gold is intentionally not used here.
+  -->
+  <style>
+    :root { --tile: #16191d; --mark: #fbfcff; }
+    @media (prefers-color-scheme: dark) {
+      :root { --tile: #e9ecf1; --mark: #121317; }
+    }
+  </style>
+  <rect width="32" height="32" rx="7" fill="var(--tile)" />
+  <path
+    fill="var(--mark)"
+    fill-rule="nonzero"
+    d="M7 26 L7 14 A9 9 0 0 1 25 14 L25 26 L21 26 L21 14 A5 5 0 0 0 11 14 L11 26 Z
+       M11 18.5 L21 18.5 L21 21.5 L11 21.5 Z"
+  />
+</svg>

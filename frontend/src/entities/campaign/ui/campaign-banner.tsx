@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { cn } from "@/shared/lib/cn";
 
 interface CampaignBannerProps {
@@ -8,19 +11,22 @@ interface CampaignBannerProps {
 
 /**
  * Frontispiece banner. With a cover: the image, held to greyscale so arbitrary
- * uploads stay inside the monochrome system. Without one: an honest placeholder —
- * ruled paper and a large ghost initial (no stock imagery, no generated art).
- * Expects a `group` ancestor for the hover life.
- * TODO(onchain): coverUrl comes from campaign metadata.
+ * uploads stay inside the monochrome system. Without one — or when the cover
+ * fails to load — an honest placeholder: ruled paper and a large ghost initial
+ * (no stock imagery, no generated art). Expects a `group` ancestor for the hover life.
  */
 export function CampaignBanner({ name, coverUrl, className }: CampaignBannerProps) {
-  if (coverUrl) {
+  // Track the URL that failed so a later coverUrl change re-attempts the image.
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+
+  if (coverUrl && failedSrc !== coverUrl) {
     return (
       <div className={cn("relative overflow-hidden bg-surface-2", className)}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={coverUrl}
           alt=""
+          onError={() => setFailedSrc(coverUrl)}
           className="absolute inset-0 h-full w-full object-cover grayscale transition-transform duration-500 ease-out group-hover:scale-[1.02]"
         />
       </div>

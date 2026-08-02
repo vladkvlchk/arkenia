@@ -35,6 +35,27 @@ const WHAT_HAPPENS = [
   { title: "Each deployment mints a cohort", body: "Depositors receive pro-rata shares; every return you post is distributed by the contract." },
 ];
 
+// Cover images are optional and size-capped; the fundraiser name must never be lost to one.
+const MAX_COVER_BYTES = 5 * 1024 * 1024; // mirrors the backend limit
+
+/** Human-readable reason for a failed metadata write, keyed by the backend error code. */
+function metadataErrorMessage(code: string): string {
+  switch (code) {
+    case "not_angel":
+      return "The signature didn't match the campaign's angel wallet — save from the wallet that created it.";
+    case "stale_auth":
+      return "The signing window expired — the campaign is live, but its name wasn't saved.";
+    case "invalid_metadata":
+      return "The name or description was rejected — check the length and try again.";
+    case "unknown_campaign":
+      return "The indexer hasn't picked up the campaign yet — it's live on-chain, but its name wasn't saved.";
+    case "network_error":
+      return "Couldn't reach the metadata service — the campaign is live on-chain, but its name wasn't saved.";
+    default:
+      return "The campaign is live on-chain, but its name/cover weren't saved.";
+  }
+}
+
 export default function CreatePage() {
   const wallet = useWallet();
   const { toast } = useToast();
@@ -46,6 +67,7 @@ export default function CreatePage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [cover, setCover] = useState<string | null>(null);
+  const [coverFile, setCoverFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -54,34 +76,77 @@ export default function CreatePage() {
 
   function onCoverChange(file?: File) {
     if (!file) return;
-    setCover(URL.createObjectURL(file));
+    if (file.size > MAX_COVER_BYTES) {
+      toast({
+        title: "Image too large",
+        description: "Cover images must be under 5 MB — please pick a smaller one.",
+        intent: "danger",
+      });
+      return;
+    }
+    setCoverFile(file); // keep the actual File — it's what gets uploaded
+    setCover(URL.createObjectURL(file)); // object URL is preview-only
   }
 
   /**
-   * Persist the angel-signed name/description off-chain. Best-effort: the campaign exists on-chain
-   * regardless, and the indexer can lag the create tx by a few seconds (retry on unknown_campaign).
+   * Persist the angel-signed name/description (+ optional cover) off-chain. Robust by design:
+   *  - the indexer can lag the create tx by tens of seconds, so `unknown_campaign` is retried over
+   *    a generous window (the write can't be verified until the campaign is indexed);
+   *  - a cover-storage problem falls back to saving the name alone rather than losing both;
+   *  - every terminal outcome is surfaced via a toast — no more silent drops.
+   * Runs to completion across the post-create navigation (toasts are app-level).
    */
   async function persistMetadata(
     campaign: `0x${string}`,
     metaName: string,
     metaDescription: string,
     issuedAt: string,
-    signature: `0x${string}`
+    signature: `0x${string}`,
+    file: File | null
   ) {
-    for (let i = 0; i < 8; i++) {
+    const RETRY_WINDOW_MS = 120_000;
+    const startedAt = Date.now();
+    let dropCover = false;
+    let lastCode = "network_error";
+
+    for (let attempt = 0; attempt < 64; attempt++) {
       try {
-        await api.putMetadata(campaign, { name: metaName, description: metaDescription, issuedAt, signature });
+        await api.putMetadata(
+          campaign,
+          { name: metaName, description: metaDescription, issuedAt, signature },
+          dropCover ? undefined : file ?? undefined
+        );
         queryClient.invalidateQueries({ queryKey: ["v3", "metadata", campaign.toLowerCase()] });
         queryClient.invalidateQueries({ queryKey: ["v3", "campaigns"] });
+        toast(
+          dropCover
+            ? {
+                title: "Name saved — cover skipped",
+                description: "The name is live; the cover image couldn't be stored.",
+                intent: "info",
+              }
+            : { title: "Campaign details saved", intent: "success" }
+        );
         return;
       } catch (e) {
-        if (e instanceof ApiError && e.code === "unknown_campaign" && i < 7) {
+        lastCode = e instanceof ApiError ? e.code : "network_error";
+        // A cover problem must never cost the name — drop the image and retry name-only
+        // (too large, a 413 at the proxy, R2 down, wrong type…). `unknown_campaign` is the one
+        // exception, handled just below: that's indexer lag, so we keep retrying WITH the cover.
+        if (!dropCover && file && lastCode !== "unknown_campaign") {
+          dropCover = true;
+          continue;
+        }
+        // Indexer hasn't caught up to the new campaign yet — keep trying within the window.
+        if (lastCode === "unknown_campaign" && Date.now() - startedAt < RETRY_WINDOW_MS) {
           await new Promise((r) => setTimeout(r, 3000));
           continue;
         }
-        return; // give up silently — the campaign is live, only the name isn't stored
+        toast({ title: "Couldn't save campaign details", description: metadataErrorMessage(lastCode), intent: "danger" });
+        return;
       }
     }
+    toast({ title: "Couldn't save campaign details", description: metadataErrorMessage(lastCode), intent: "danger" });
   }
 
   async function submit() {
@@ -111,14 +176,21 @@ export default function CreatePage() {
           const issuedAt = new Date().toISOString();
           const message = buildMetadataMessage(activeChain.id, newAddr, metaName, metaDescription, issuedAt);
           const signature = await signMessageAsync({ message });
-          void persistMetadata(newAddr, metaName, metaDescription, issuedAt, signature);
+          // Detached on purpose: it retries past the indexer lag and toasts its own outcome.
+          void persistMetadata(newAddr, metaName, metaDescription, issuedAt, signature, coverFile);
         } catch {
-          /* user declined the signature — the campaign is live, its name just isn't stored yet */
+          toast({
+            title: "Name not saved",
+            description:
+              "You declined the signature, so the campaign is live on-chain but has no name yet.",
+            intent: "info",
+          });
         }
       }
       toast({
         title: "Campaign created",
-        description: name ? `"${name}" is live.` : "Your campaign is live.",
+        description:
+          newAddr && API_ENABLED ? "Live on-chain — saving name & cover…" : "Your campaign is live on-chain.",
         intent: "success",
         txHash,
       });
@@ -189,7 +261,10 @@ export default function CreatePage() {
                   <button
                     type="button"
                     aria-label="Remove cover image"
-                    onClick={() => setCover(null)}
+                    onClick={() => {
+                      setCover(null);
+                      setCoverFile(null);
+                    }}
                     className="absolute right-2 top-2 rounded-md border border-line bg-surface/95 p-1.5 text-ink-muted transition-colors duration-150 hover:text-ink"
                   >
                     <X className="h-3.5 w-3.5" aria-hidden />

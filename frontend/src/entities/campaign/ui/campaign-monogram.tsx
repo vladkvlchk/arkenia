@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { cn } from "@/shared/lib/cn";
 
 interface CampaignMonogramProps {
@@ -14,11 +17,14 @@ const sizes = {
 } as const;
 
 /**
- * Deterministic initials tile shown until a campaign uploads a cover.
- * No stock imagery, no generated art — honest placeholder.
- * TODO(onchain): render coverUrl from campaign metadata when present.
+ * Deterministic initials tile shown until a campaign uploads a cover — or when
+ * the cover fails to load (broken/missing URL). No stock imagery, no generated
+ * art — honest placeholder.
  */
 export function CampaignMonogram({ name, coverUrl, size = "md", className }: CampaignMonogramProps) {
+  // Track the URL that failed so a later coverUrl change re-attempts the image.
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+
   const initials = name
     .split(/\s+/)
     .slice(0, 2)
@@ -26,12 +32,13 @@ export function CampaignMonogram({ name, coverUrl, size = "md", className }: Cam
     .join("")
     .toUpperCase();
 
-  if (coverUrl) {
+  if (coverUrl && failedSrc !== coverUrl) {
     // eslint-disable-next-line @next/next/no-img-element
     return (
       <img
         src={coverUrl}
         alt=""
+        onError={() => setFailedSrc(coverUrl)}
         className={cn("shrink-0 rounded-md border border-line object-cover", sizes[size], className)}
       />
     );
