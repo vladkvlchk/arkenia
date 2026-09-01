@@ -1,10 +1,13 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
 #
 # CodeRabbit review configuration.
-# Only values that differ from the defaults are set here; everything else is
-# left to CodeRabbit so this file does not drift as their defaults evolve.
-
-language: en-US
+#
+# Two kinds of entry live here, and nothing else:
+#   1. values that differ from CodeRabbit's defaults, and
+#   2. defaults pinned on purpose — `request_changes_workflow`,
+#      `auto_review.enabled`, `auto_review.drafts` — where a future change to
+#      their default would silently change how this repo is reviewed.
+# Everything else is left unset so the file does not drift as defaults evolve.
 
 tone_instructions: >-
   Be direct and technical. Skip praise and do not restate the diff. Raise a
