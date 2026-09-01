@@ -1,0 +1,44 @@
+name: branch gate
+
+# GitHub has no native rule restricting which branch a pull request may come
+# from — rulesets and branch protection only ever condition on the *target*.
+# This job is that missing rule: make it a required status check on `main` and
+# `main` becomes reachable only from `testnet`.
+#
+# Promotion path:  feature -> dev -> testnet -> main
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  source-branch:
+    name: main accepts testnet only
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify the pull request comes from testnet
+        env:
+          # Read through env, never interpolated straight into the script:
+          # a branch name is attacker-controlled text on a public repo.
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # A fork can name its branch `testnet` too, so the name alone proves
+          # nothing — the head repository has to be this one.
+          if [ "$HEAD_REPO" != "$BASE_REPO" ]; then
+            echo "::error::main only accepts pull requests from ${BASE_REPO}:testnet — this one comes from the fork ${HEAD_REPO}."
+            exit 1
+          fi
+
+          if [ "$HEAD_REF" != "testnet" ]; then
+            echo "::error::main only accepts pull requests from testnet, but this one comes from '${HEAD_REF}'. Merge it into testnet first, then open testnet -> main."
+            exit 1
+          fi
+
+          echo "OK: ${HEAD_REF} -> main"
