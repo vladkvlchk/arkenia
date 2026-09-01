@@ -1,0 +1,80 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+#
+# CodeRabbit review configuration.
+# Only values that differ from the defaults are set here; everything else is
+# left to CodeRabbit so this file does not drift as their defaults evolve.
+
+language: en-US
+
+tone_instructions: >-
+  Be direct and technical. Skip praise and do not restate the diff. Raise a
+  concern only when you can name the input, state, or ordering that triggers
+  it.
+
+reviews:
+  # This repo moves money on-chain — prefer more findings over fewer.
+  profile: assertive
+
+  # Report findings as comments; do not block the PR with a formal
+  # "changes requested" that has to be manually dismissed.
+  request_changes_workflow: false
+
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - main
+      - dev
+      - testnet
+
+  # Build output, vendored deps, and Hardhat artifacts. These are regenerated,
+  # never hand-edited, and would otherwise bury the real diff.
+  path_filters:
+    - "!**/node_modules/**"
+    - "!**/package-lock.json"
+    - "!contracts/artifacts/**"
+    - "!contracts/cache/**"
+    - "!contracts/deployments/**"
+    - "!frontend/.next/**"
+    - "!backend-v3/dist/**"
+
+  path_instructions:
+    - path: "backend-v3/src/domain/**"
+      instructions: >-
+        Pure domain layer. Flag any import from infrastructure/, presentation/,
+        or a third-party client. Money and share quantities are raw on-chain
+        integers (bigint, token base units): flag float arithmetic on them, and
+        flag any conversion to a display unit happening outside the
+        presentation edge.
+
+    - path: "backend-v3/src/**"
+      instructions: >-
+        Clean Architecture — dependencies point inward toward domain.
+        application/ may import domain/ only; infrastructure/ and presentation/
+        implement the ports declared in application/ports.ts. Flag any inner
+        layer reaching outward, and any port implementation that leaks its
+        transport type into an application signature.
+
+    - path: "frontend/src/**"
+      instructions: >-
+        Feature-Sliced Design — app > widgets > features > entities > shared.
+        A slice may import only from layers below it, and only through that
+        slice's public index file. Flag upward imports and deep imports that
+        reach past a slice's public API.
+
+    - path: "contracts/contracts/**/*.sol"
+      instructions: >-
+        Prioritise reentrancy, checks-effects-interactions ordering, unchecked
+        arithmetic, and rounding direction on share and reward accounting.
+        Rounding must never favour the caller over the pool. Flag any external
+        call made before state is written.
+
+    - path: "backend-v3/test/**"
+      instructions: >-
+        Tests are hermetic (PGlite in-process, scripted chain source) — flag
+        anything reaching the network, the clock, or a real RPC endpoint.
+
+    - path: ".github/workflows/**"
+      instructions: >-
+        Flag unpinned third-party actions, secrets exposed to pull_request
+        triggers, and any step that runs untrusted PR code with write access.
