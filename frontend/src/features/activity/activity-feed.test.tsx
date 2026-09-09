@@ -54,6 +54,26 @@ describe("ActivityFeed labelling", () => {
   });
 
   /**
+   * `returnFundsToAll` and `claim` are emitted without a cohortId — the first
+   * is campaign-wide, the second settles every held cohort at once. Both used
+   * to render a literal "#undefined" into what is meant to be an audit trail.
+   */
+  it("names the campaign-wide events without inventing a cohort", () => {
+    render(
+      <ActivityFeed
+        items={[
+          item({ id: "1", type: "return" }),
+          item({ id: "2", type: "claim" }),
+        ]}
+      />
+    );
+
+    expect(screen.getByText("Return to all cohorts")).toBeInTheDocument();
+    expect(screen.getByText("Claim rewards")).toBeInTheDocument();
+    expect(screen.queryByText(/undefined/)).not.toBeInTheDocument();
+  });
+
+  /**
    * Rows come from the indexer and are cast, not validated. A type this table
    * has not been taught yet used to destructure undefined and take the whole
    * route down — losing every other row in the process.
