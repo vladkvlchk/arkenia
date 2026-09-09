@@ -32,13 +32,25 @@ import { useApiAccountActivity, useApiAccountPositions } from "@/lib/hooks/api";
 import { seedMeta } from "@/lib/metadata";
 import { useClaimAll } from "./use-claim-all";
 
-const activityBadge: Record<ActivityType, { label: string; variant: "success" | "neutral" | "info" | "accent" }> = {
+type BadgeConfig = { label: string; variant: "success" | "neutral" | "info" | "accent" };
+
+const activityBadge: Record<ActivityType, BadgeConfig> = {
   deposit: { label: "Deposit", variant: "accent" },
   withdraw: { label: "Deploy", variant: "info" },
   return: { label: "Return", variant: "success" },
   claim: { label: "Claim", variant: "success" },
   refund: { label: "Refund", variant: "neutral" },
 };
+
+/**
+ * History rows come from the indexer unvalidated, so `type` is only a
+ * compile-time union. A value this table has not been taught yet falls back to
+ * its own name rather than taking the whole tab down with it.
+ */
+function ActivityBadge({ type }: { type: ActivityType }) {
+  const { label, variant } = activityBadge[type] ?? { label: type, variant: "neutral" };
+  return <Badge variant={variant}>{label}</Badge>;
+}
 
 function activityDetail(type: ActivityType, cohortIndex?: number): string {
   switch (type) {
@@ -262,7 +274,7 @@ export function ProfileScreen({ address }: ProfileScreenProps) {
                     <Tr key={h.id}>
                       <Td className="text-ink-muted">{fmtDate(h.at)}</Td>
                       <Td>
-                        <Badge variant={activityBadge[h.type].variant}>{activityBadge[h.type].label}</Badge>
+                        <ActivityBadge type={h.type} />
                       </Td>
                       <Td className="font-medium text-ink">{campaignLabel(h.campaignAddress)}</Td>
                       <Td className="text-[13px] text-ink-muted">{activityDetail(h.type, h.cohortIndex)}</Td>
