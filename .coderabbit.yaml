@@ -22,6 +22,14 @@ reviews:
   # "changes requested" that has to be manually dismissed.
   request_changes_workflow: false
 
+  # Suppresses the "review skipped" notice. CodeRabbit gates automatic reviews
+  # on free plans behind a 10-star threshold, so every PR here opened with a
+  # comment explaining that no review would run — a notice carrying no review.
+  # This hides the notice only; it does not restore automatic reviews. Until
+  # the repo clears the threshold, a review has to be asked for by commenting
+  # `@coderabbitai review` on the PR.
+  review_status: false
+
   auto_review:
     enabled: true
     drafts: false
