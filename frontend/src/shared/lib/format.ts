@@ -16,6 +16,19 @@ export function fmtNum(value: number, decimals?: number): string {
   return `${spacedInt}.${decPart}`;
 }
 
+/**
+ * Adds token amounts at the token's own precision.
+ *
+ * Amounts reach the UI as display-unit floats via `formatUnits(x, 6)`, so every true value is a
+ * whole number of micro-units — but their float sum is not. `1000 + 319.999999` evaluates to
+ * `1319.9999990000001`, and `fmtNum` with no `decimals` renders a float verbatim, which put
+ * thirteen digits of IEEE noise in a headline claimable balance. Scaling to integers first
+ * removes the error and nothing else: no real amount has more than six decimals.
+ */
+export function sumTokens(values: number[]): number {
+  return values.reduce((micro, v) => micro + Math.round(v * 1e6), 0) / 1e6;
+}
+
 /** Money-style: always two decimals — "1 250.00". */
 export function fmtAmount(value: number): string {
   if (!Number.isFinite(value)) return "0.00";

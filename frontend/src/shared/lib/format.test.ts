@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { fmtAmount, fmtDate, fmtDateTime, fmtNum, fmtPct, truncateAddress } from "./format";
+import {
+  fmtAmount,
+  fmtDate,
+  fmtDateTime,
+  fmtNum,
+  fmtPct,
+  sumTokens,
+  truncateAddress,
+} from "./format";
 
 // The formatters emit U+00A0 rather than a plain space. Written as an escape
 // rather than the character itself: the two are indistinguishable on screen and
@@ -57,6 +65,39 @@ describe("fmtAmount", () => {
   it("renders zero rather than a broken string on non-finite input", () => {
     expect(fmtAmount(NaN)).toBe("0.00");
     expect(fmtAmount(Infinity)).toBe("0.00");
+  });
+});
+
+describe("sumTokens", () => {
+  /**
+   * The case that put "1 319.9999990000001 tUSDC" in the profile's headline
+   * claimable balance: four positions worth 0, 1000, 0 and 319.999999, whose
+   * plain float sum carries an error at the thirteenth decimal — and fmtNum
+   * with no `decimals` renders a float verbatim.
+   */
+  it("adds claimable balances without float drift", () => {
+    const positions = [0, 1000, 0, 319.999999];
+
+    expect(positions.reduce((s, v) => s + v, 0)).toBe(1319.9999990000001); // the bug
+    expect(sumTokens(positions)).toBe(1319.999999);
+  });
+
+  // Dust is real, not noise: floored RAY arithmetic genuinely produces amounts
+  // at the sixth decimal, and they must survive summation intact.
+  it("keeps amounts at the token's six decimals", () => {
+    expect(sumTokens([0.000001, 0.000002])).toBe(0.000003);
+    expect(sumTokens([1209.999999, 0.000001])).toBe(1210);
+  });
+
+  it("returns zero for nothing to add", () => {
+    expect(sumTokens([])).toBe(0);
+  });
+
+  // A position read mid-reconnect resolves to undefined and arrives as NaN.
+  // The old reduce propagated it too, and both fmtNum and fmtAmount render
+  // non-finite input as zero — so this pins behaviour rather than changing it.
+  it("propagates a non-finite amount for the formatters to handle", () => {
+    expect(fmtAmount(sumTokens([100, NaN]))).toBe("0.00");
   });
 });
 
