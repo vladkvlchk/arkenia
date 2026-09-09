@@ -2,6 +2,7 @@
 
 import { useId } from "react";
 import { cn } from "@/shared/lib/cn";
+import { normalizeAmountInput, toAmountString, TOKEN_DECIMALS } from "@/shared/lib/amount";
 import { fmtAmount } from "@/shared/lib/format";
 import { Field, inputClasses } from "./input";
 
@@ -14,6 +15,8 @@ interface NumberInputProps {
   /** When set, shows "Balance …" in the label row and enables the MAX action. */
   balance?: number;
   balanceLabel?: string;
+  /** Token precision. Extra digits are truncated, never rounded — see toAmountString. */
+  maxDecimals?: number;
   placeholder?: string;
   error?: string;
   hint?: React.ReactNode;
@@ -30,6 +33,7 @@ export function NumberInput({
   suffix,
   balance,
   balanceLabel = "Balance",
+  maxDecimals = TOKEN_DECIMALS,
   placeholder = "0.00",
   error,
   hint,
@@ -41,10 +45,7 @@ export function NumberInput({
   const inputId = id ?? autoId;
 
   function handleChange(raw: string) {
-    // Digits and a single decimal point only; normalize comma for EU keyboards.
-    const cleaned = raw.replace(",", ".").replace(/[^0-9.]/g, "");
-    const parts = cleaned.split(".");
-    onChange(parts.length > 2 ? `${parts[0]}.${parts.slice(1).join("")}` : cleaned);
+    onChange(normalizeAmountInput(raw, maxDecimals));
   }
 
   return (
@@ -82,7 +83,7 @@ export function NumberInput({
             <button
               type="button"
               disabled={disabled}
-              onClick={() => onChange(String(balance))}
+              onClick={() => onChange(toAmountString(balance, maxDecimals))}
               className="rounded-sm font-mono text-2xs font-medium tracking-[0.08em] text-accent transition-colors duration-150 hover:text-accent-hover disabled:opacity-45"
             >
               MAX
