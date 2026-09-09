@@ -101,9 +101,9 @@ describe("fmtDate", () => {
   });
 
   /**
-   * useCohortsView builds cohorts from chain reads alone and has no formation
-   * timestamp to give them, so the angel's cohort ledger passes an empty string
-   * here on every campaign the indexer has not covered. Rendering the literal
+   * A cohort's formation time is only in the Withdrawn event, so useCohortsView
+   * fills it from the indexer and passes an empty string whenever the indexer
+   * has not covered that campaign — or is unreachable. Rendering the literal
    * "Invalid Date" in a financial table is worse than an honest dash.
    */
   it("renders a placeholder for a missing or unparseable date", () => {
