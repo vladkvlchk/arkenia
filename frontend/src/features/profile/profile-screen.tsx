@@ -52,6 +52,13 @@ function ActivityBadge({ type }: { type: ActivityType }) {
   return <Badge variant={variant}>{label}</Badge>;
 }
 
+/**
+ * The default branch covers `claim` and `return`, and neither is guaranteed to
+ * name a cohort: a claim settles every held cohort in one event, and
+ * `returnFundsToAll` is campaign-wide. Both reach here without a cohortIndex,
+ * which interpolated raw as "Cohort #undefined". `withdraw` is exempt — the
+ * Withdrawn event carries an indexed cohortId.
+ */
 function activityDetail(type: ActivityType, cohortIndex?: number): string {
   switch (type) {
     case "deposit":
@@ -61,7 +68,7 @@ function activityDetail(type: ActivityType, cohortIndex?: number): string {
     case "withdraw":
       return `Cohort #${cohortIndex} minted`;
     default:
-      return `Cohort #${cohortIndex}`;
+      return cohortIndex === undefined ? "All cohorts" : `Cohort #${cohortIndex}`;
   }
 }
 

@@ -321,6 +321,21 @@ describe("ProfileScreen history", () => {
     expect(screen.getByText("Pool · 1:1")).toBeInTheDocument();
   });
 
+  // `claim` settles every held cohort in one event and `returnFundsToAll` is
+  // campaign-wide, so neither arrives with a cohortIndex. Both used to render a
+  // literal "Cohort #undefined" into the history table.
+  it("describes campaign-wide events without inventing a cohort", async () => {
+    history = [
+      activity({ id: "1", type: "claim" }),
+      activity({ id: "2", type: "return" }),
+    ];
+    renderProfile();
+    await openHistory();
+
+    expect(screen.getAllByText("All cohorts")).toHaveLength(2);
+    expect(screen.queryByText(/undefined/)).not.toBeInTheDocument();
+  });
+
   // The indexer can grow a type before this screen learns about it, and losing
   // the whole history tab over one unmapped row is a poor trade.
   it("survives an event type it does not recognise", async () => {
