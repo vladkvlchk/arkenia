@@ -41,7 +41,12 @@ interface GridLayout {
   gap: number;
 }
 
-function computeLayout(
+/**
+ * Exported for its own tests. The grid draws to a canvas, so this arithmetic
+ * has no rendered surface to assert against — and it decides both whether the
+ * band renders at all and what unit the legend claims each square is worth.
+ */
+export function computeLayout(
   width: number,
   height: number,
   raised: number,

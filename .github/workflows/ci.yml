@@ -42,6 +42,8 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
       - run: npm ci
+      # Hermetic: jsdom + mocked chain and API layers — no network, no RPC.
+      - run: npm run --workspace frontend test
       # `next build` runs the type-check and lint; no env needed (config has mainnet defaults).
       - run: npm run --workspace frontend build
 
