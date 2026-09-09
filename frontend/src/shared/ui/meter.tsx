@@ -8,7 +8,10 @@ interface MeterProps extends React.HTMLAttributes<HTMLDivElement> {
 
 /** Quiet proportion bar (pool utilisation, cohort share). Never animated hype. */
 export function Meter({ value, label, className, ...props }: MeterProps) {
-  const clamped = Math.min(1, Math.max(0, value));
+  // Callers pass raised / goal, which is NaN before the goal has loaded and on
+  // a campaign with no target — Math.min would carry that straight into
+  // aria-valuenow, where a screen reader announces "NaN percent".
+  const clamped = Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0;
   return (
     <div
       role="meter"
