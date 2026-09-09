@@ -106,7 +106,8 @@ function SplitCard({ campaign, featured }: { campaign: Campaign; featured: boole
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
             <CampaignStatusBadge status={campaign.status} />
             <span className="text-xs text-ink-subtle">
-              {campaign.believers} believers · since {fmtDate(campaign.createdAt)}
+              {campaign.believers} {campaign.believers === 1 ? "believer" : "believers"} · since{" "}
+              {fmtDate(campaign.createdAt)}
             </span>
           </div>
           <h3 className="mt-3 font-serif text-2xl leading-tight tracking-[-0.01em] text-ink">
