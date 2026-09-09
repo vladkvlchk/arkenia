@@ -1,11 +1,4 @@
-<!--
-  Placeholders marked 🖼️ (image) / 🎥 (video) need real assets captured from the app.
-  Everything else is ready. Replace each blockquote placeholder with the asset, then delete its note.
--->
-
 <div align="center">
-
-<!-- 🖼️ Optional: a logo/banner (the app favicon lives at frontend/src/app/icon.svg — an arch/"A" monogram). -->
 
 # Arkenia
 
@@ -22,7 +15,7 @@ Back angel campaigns in USDC — deposits stay refundable until deployed, deploy
 
 </div>
 
-> 🖼️ **Hero shot needed** — _a wide screenshot or short GIF of the campaign explorer / a campaign detail page. This is the first thing a reviewer sees; make it count._
+![Arkenia landing page: "Pooled angel investing, refundable until deployed", beside a worked example tracing 10 000 tUSDC from deposit through cohort shares to returns](.github/assets/hero.png)
 
 ---
 
@@ -37,7 +30,9 @@ Arkenia is a full-stack Web3 product that rethinks crowdfunding around a **trust
 
 The result is a fundraising primitive where backers keep optionality (refund early, or hold a claim on upside) and the operator can only ever touch capital they've openly deployed.
 
-> 🖼️ **Screenshot needed** — _campaign detail page: pool total, cohorts, and the deposit/refund panel._
+![Campaign detail for "Meridian Yield": 300 tUSDC refundable in the pool, 1 200 deposited, 900 deployed across one cohort, 1 210 returned at 1.34× — with the believer's position, cohort ledger and deposit panel below](.github/assets/campaign.png)
+
+<sub>Live testnet data. The 1 209.999999 in the cohort ledger against 1 210 returned is floored dust from the contract's RAY accounting, not a rounding error — the indexer reproduces it exactly.</sub>
 
 ---
 
@@ -79,19 +74,16 @@ Things in here worth a closer look if you're reviewing the engineering:
 
 ## 📸 Screenshots
 
-> 🖼️ **Add 3–4 shots** (or a single GIF walkthrough). Suggested set, each ~1 line caption:
-> - Campaign explorer / grid
-> - Campaign detail (pool, cohorts, deposit)
-> - Premarket order book
-> - Portfolio / positions
+All shots are the live Base Sepolia contour with a wallet connected — real campaigns, real
+on-chain figures, no mockups.
 
 | Explorer | Campaign detail |
 |---|---|
-| 🖼️ _explorer.png_ | 🖼️ _campaign.png_ |
+| [![Campaign explorer: search, status filters and sort over eight campaigns, with Meridian Yield featured](.github/assets/explorer.png)](.github/assets/explorer.png) | [![Campaign detail: pool, deployed and returned totals above the believer's position, cohort ledger and deposit panel](.github/assets/campaign.png)](.github/assets/campaign.png) |
+| Search, filter by lifecycle, sort by raised/returned/believers. The band under each campaign is one square per 100 tUSDC raised — hollow once returned. | Pool, cohorts and the deposit/refund panel. Figures come from the indexer, with direct chain reads as the fallback. |
 | **Premarket** | **Portfolio** |
-| 🖼️ _premarket.png_ | 🖼️ _portfolio.png_ |
-
-> 🎥 _Optional but strong: a 30–60s demo video (Loom/YouTube) linked here._
+| [![Premarket order book for cohort #1: bids and asks with sizes, spread, and a ticket for signing a new order](.github/assets/premarket.png)](.github/assets/premarket.png) | [![Portfolio: pooled, cohort shares and claimable totals above a table of positions across four campaigns](.github/assets/portfolio.png)](.github/assets/portfolio.png) |
+| Per-cohort share book. Orders are EIP-712 intents signed off-chain — free to place and cancel-safe, settled on-chain when filled. | Balances across every campaign, and a claim that batches one transaction per campaign. |
 
 ---
 
@@ -150,8 +142,6 @@ Three independently-deployable pieces, wired by contract addresses and a shared 
 - **`backend-v3/`** — **Clean Architecture** (domain / application / infrastructure / presentation): a viem **indexer** projects on-chain events into Postgres (Drizzle), a **Fastify** API serves campaigns, activity, positions, premarket, and angel-signed metadata; covers on R2.
 
 Both contours (mainnet + testnet) run from **one build**, selected by env (chain id, factory address, RPC, API URL, Privy app).
-
-> 🖼️ _Optional: replace the diagrams above with a designed architecture graphic if you make one._
 
 ---
 
