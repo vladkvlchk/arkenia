@@ -9,14 +9,21 @@ import { useAllCampaigns, useCampaignView, useCohortsView } from "./campaign-dat
  * campaign shows another campaign's figures, and the RAY arithmetic can drift
  * from the contract's, so returns are simply wrong.
  */
-const { useReadContracts, useCampaigns, useCampaignSummary, useApiCampaigns, useApiCampaignMetadata } =
-  vi.hoisted(() => ({
-    useReadContracts: vi.fn(),
-    useCampaigns: vi.fn(),
-    useCampaignSummary: vi.fn(),
-    useApiCampaigns: vi.fn(),
-    useApiCampaignMetadata: vi.fn(),
-  }));
+const {
+  useReadContracts,
+  useCampaigns,
+  useCampaignSummary,
+  useApiCampaign,
+  useApiCampaigns,
+  useApiCampaignMetadata,
+} = vi.hoisted(() => ({
+  useReadContracts: vi.fn(),
+  useCampaigns: vi.fn(),
+  useCampaignSummary: vi.fn(),
+  useApiCampaign: vi.fn(),
+  useApiCampaigns: vi.fn(),
+  useApiCampaignMetadata: vi.fn(),
+}));
 
 let apiEnabled = false;
 
@@ -26,7 +33,7 @@ vi.mock("wagmi", async (importOriginal) => ({
 }));
 
 vi.mock("./campaign", () => ({ useCampaigns, useCampaignSummary }));
-vi.mock("./api", () => ({ useApiCampaigns, useApiCampaignMetadata }));
+vi.mock("./api", () => ({ useApiCampaign, useApiCampaigns, useApiCampaignMetadata }));
 
 // API_ENABLED is a module constant, so it is exposed through a getter the tests
 // can flip between the indexer-backed and on-chain-fallback paths.
@@ -50,6 +57,7 @@ beforeEach(() => {
   apiEnabled = false;
   useCampaigns.mockReturnValue({ campaigns: [], isLoading: false });
   useCampaignSummary.mockReturnValue({ summary: undefined, isLoading: false });
+  useApiCampaign.mockReturnValue({ data: undefined });
   useApiCampaigns.mockReturnValue({ data: undefined, isError: false });
   useApiCampaignMetadata.mockReturnValue({ data: undefined });
   useReadContracts.mockReturnValue({ data: undefined, isLoading: false });
@@ -245,6 +253,97 @@ describe("useCampaignView metadata precedence", () => {
   });
 });
 
+/**
+ * `rewardReserves` is returned *minus claimed*, so it is only equal to lifetime
+ * returned until the first claim. Reading it as "returned" made a campaign that
+ * had returned 210 render 0.000001 next to a cohort row still showing 210 — two
+ * numbers for one quantity on one page. Lifetime figures come from the indexer;
+ * the chain keeps the ones a pending transaction is about to change.
+ */
+describe("useCampaignView figure sourcing", () => {
+  // Deployed 900 of 1200 deposited; 210 returned and since claimed, so reserves
+  // are down to dust and the pool holds the un-deployed 300.
+  const claimed = {
+    angel: ANGEL,
+    token: ANGEL,
+    poolTotal: 300_000_000n,
+    currentCohort: 1n,
+    totalShares: 900_000_000n,
+    rewardReserves: 1n,
+  };
+
+  const indexed = {
+    address: UNKNOWN,
+    name: "Indexed",
+    description: "",
+    angel: { address: ANGEL },
+    status: "returning" as const,
+    poolBalance: 300,
+    totalDeposited: 1200,
+    totalWithdrawn: 900,
+    totalReturned: 210,
+    cohortCount: 1,
+    believers: 4,
+    createdAt: "2026-07-10T18:11:06.000Z",
+  };
+
+  it("takes lifetime returned from the indexer, not the depleted reserve", () => {
+    useCampaignSummary.mockReturnValue({ summary: claimed, isLoading: false });
+    useApiCampaign.mockReturnValue({ data: { campaign: indexed, cohorts: [] } });
+
+    const { result } = renderHook(() => useCampaignView(UNKNOWN));
+
+    expect(result.current.campaign?.totalReturned).toBe(210);
+  });
+
+  // believers and createdAt have no on-chain source at all: the fallback invents
+  // 0 and "now", which would silently date every campaign to the current render.
+  it("takes believers and creation time from the indexer", () => {
+    useCampaignSummary.mockReturnValue({ summary: claimed, isLoading: false });
+    useApiCampaign.mockReturnValue({ data: { campaign: indexed, cohorts: [] } });
+
+    const { result } = renderHook(() => useCampaignView(UNKNOWN));
+
+    expect(result.current.campaign?.believers).toBe(4);
+    expect(result.current.campaign?.createdAt).toBe("2026-07-10T18:11:06.000Z");
+  });
+
+  /**
+   * The indexer trails the chain by a poll, and this is the page people transact
+   * on — a deposit that has confirmed must not read stale while it catches up.
+   */
+  it("keeps the chain's figures for what the next transaction changes", () => {
+    useCampaignSummary.mockReturnValue({
+      summary: { ...claimed, poolTotal: 800_000_000n },
+      isLoading: false,
+    });
+    useApiCampaign.mockReturnValue({ data: { campaign: indexed, cohorts: [] } });
+
+    const { result } = renderHook(() => useCampaignView(UNKNOWN));
+
+    expect(result.current.campaign?.poolBalance).toBe(800);
+  });
+
+  it("falls back to the on-chain campaign when the indexer is unavailable", () => {
+    useCampaignSummary.mockReturnValue({ summary: claimed, isLoading: false });
+
+    const { result } = renderHook(() => useCampaignView(UNKNOWN));
+
+    expect(result.current.campaign?.poolBalance).toBe(300);
+    expect(result.current.campaign?.totalReturned).toBe(0.000001);
+  });
+
+  // An RPC hiccup should not blank a page the indexer can already describe.
+  it("still renders from the indexed record when the chain reads fail", () => {
+    useCampaignSummary.mockReturnValue({ summary: undefined, isLoading: false });
+    useApiCampaign.mockReturnValue({ data: { campaign: indexed, cohorts: [] } });
+
+    const { result } = renderHook(() => useCampaignView(UNKNOWN));
+
+    expect(result.current.campaign?.totalReturned).toBe(210);
+  });
+});
+
 describe("useCohortsView", () => {
   /**
    * returned = totalShares × (cohortAcc + globalAcc) / RAY, mirroring the
@@ -275,6 +374,52 @@ describe("useCohortsView", () => {
       yourShares: 250,
       yourClaimable: 30,
     });
+  });
+
+  /**
+   * A cohort's formation time is in the Withdrawn event, not in contract state,
+   * so the chain cannot supply it and the column rendered "—" on every row. It
+   * is matched by index, not by array position: the indexer may return cohorts
+   * in any order, or a subset.
+   */
+  it("fills formation times from the indexer, by index", () => {
+    useReadContracts.mockReturnValue({
+      isLoading: false,
+      ...results(
+        0n,
+        1_000_000_000n, 0n, 0n, 0n,   // cohort 1
+        2_000_000_000n, 0n, 0n, 0n    // cohort 2
+      ),
+    });
+    useApiCampaign.mockReturnValue({
+      data: {
+        campaign: undefined,
+        cohorts: [
+          { index: 2, formedAt: "2026-07-12T09:00:00.000Z" },
+          { index: 1, formedAt: "2026-07-10T18:11:10.000Z" },
+        ],
+      },
+    });
+
+    const { result } = renderHook(() => useCohortsView(AURORA, ANGEL, 2n));
+
+    expect(result.current.cohorts.map((c) => c.formedAt)).toEqual([
+      "2026-07-10T18:11:10.000Z",
+      "2026-07-12T09:00:00.000Z",
+    ]);
+  });
+
+  // Without the indexer the field stays empty, which fmtDate renders as "—".
+  // An undefined here would reach the formatter and print "Invalid Date".
+  it("leaves formation empty rather than undefined when the indexer is absent", () => {
+    useReadContracts.mockReturnValue({
+      isLoading: false,
+      ...results(0n, 1_000_000_000n, 0n, 0n, 0n),
+    });
+
+    const { result } = renderHook(() => useCohortsView(AURORA, ANGEL, 1n));
+
+    expect(result.current.cohorts[0].formedAt).toBe("");
   });
 
   // Four reads per cohort follow a single leading global read; an off-by-one in

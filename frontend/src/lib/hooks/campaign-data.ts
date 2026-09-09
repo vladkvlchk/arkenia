@@ -7,7 +7,7 @@ import { API_ENABLED } from "@/shared/config";
 import { campaignContract } from "../contracts";
 import { campaignMeta, seedMeta } from "../metadata";
 import { useCampaigns, useCampaignSummary, type CampaignSummary } from "./campaign";
-import { useApiCampaigns, useApiCampaignMetadata } from "./api";
+import { useApiCampaign, useApiCampaigns, useApiCampaignMetadata } from "./api";
 
 type Addr = `0x${string}`;
 const toNum = (x: bigint) => Number(formatUnits(x, 6));
@@ -109,14 +109,42 @@ export function useAllCampaigns() {
 }
 
 /**
- * A single campaign for the detail page. Live figures (pool/deployed/returned) stay on-chain so
- * they update the instant a tx confirms; name/description overlay from persisted metadata (seed
- * names win; a real stored record beats the derived fallback).
+ * A single campaign for the detail page, drawing each figure from the source that can actually
+ * answer it:
+ *
+ *   chain   — pool, deployed, cohort count. These change the moment a tx confirms, and this is
+ *             the page people transact on, so they must not wait on an indexer poll.
+ *   indexer — lifetime deposited/returned, believers, createdAt. The chain has no cheap answer:
+ *             `rewardReserves` is returned *minus claimed*, so reading it as "returned"
+ *             under-reports by every claim ever made — a campaign that had returned 210 read
+ *             0.000001 once its believer claimed. `pool + deployed` likewise under-reports
+ *             lifetime deposits by everything since refunded. believers/createdAt have no
+ *             on-chain source at all.
+ *
+ * Losing the API degrades to exactly the on-chain-only campaign this used to build; losing the
+ * chain reads still renders, from the indexed record alone.
  */
 export function useCampaignView(address?: Addr) {
   const { summary, isLoading } = useCampaignSummary(address);
-  const base = address && summary?.angel ? toCampaign(address, summary) : undefined;
+  const apiQ = useApiCampaign(address);
   const metaQ = useApiCampaignMetadata(address);
+
+  const chain = address && summary?.angel ? toCampaign(address, summary) : undefined;
+  const indexed = apiQ.data?.campaign;
+
+  // Indexed record as the base — the chain overlays only what it answers more currently.
+  let base: Campaign | undefined;
+  if (indexed && chain) {
+    base = {
+      ...indexed,
+      poolBalance: chain.poolBalance,
+      totalWithdrawn: chain.totalWithdrawn,
+      cohortCount: chain.cohortCount,
+      status: chain.status,
+    };
+  } else {
+    base = chain ?? indexed;
+  }
 
   let campaign = base;
   if (base) {
@@ -128,10 +156,16 @@ export function useCampaignView(address?: Addr) {
       campaign = { ...base, name: m.name, description: m.description, coverUrl: m.coverUrl ?? base.coverUrl };
     }
   }
-  return { campaign, isLoading };
+  return { campaign, isLoading: isLoading && !campaign };
 }
 
-/** Per-cohort ledger for a viewer: supply, lifetime returned, your shares, your claimable. */
+/**
+ * Per-cohort ledger for a viewer: supply, lifetime returned, your shares, your claimable.
+ *
+ * Every figure here is read from the chain so a viewer's own numbers are never a poll behind.
+ * The one exception is `formedAt`: a cohort's formation time lives in the Withdrawn event, not
+ * in contract state, so it can only come from the indexer.
+ */
 export function useCohortsView(address?: Addr, user?: Addr, currentCohort = 0n) {
   const n = Number(currentCohort);
   const ids = Array.from({ length: n }, (_, i) => i + 1);
@@ -155,6 +189,9 @@ export function useCohortsView(address?: Addr, user?: Addr, currentCohort = 0n) 
   });
   const r = data as ({ result?: unknown } | undefined)[] | undefined;
 
+  const apiQ = useApiCampaign(address);
+  const formedAt = new Map((apiQ.data?.cohorts ?? []).map((c) => [c.index, c.formedAt]));
+
   const cohorts: Cohort[] = [];
   if (r && address) {
     const globalAcc = (r[0]?.result as bigint) ?? 0n;
@@ -166,8 +203,9 @@ export function useCohortsView(address?: Addr, user?: Addr, currentCohort = 0n) 
       const yourClaimable = (r[b + 3]?.result as bigint) ?? 0n;
       cohorts.push({
         campaignAddress: address,
+        // Empty without the indexer — fmtDate renders that as "—" rather than "Invalid Date".
+        formedAt: formedAt.get(i) ?? "",
         index: i,
-        formedAt: "", // TODO(onchain): from the withdraw event timestamp (indexer)
         totalShares: toNum(totalShares),
         returned: toNum((totalShares * (cohortAcc + globalAcc)) / RAY),
         yourShares: toNum(yourShares),
