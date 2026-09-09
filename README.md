@@ -245,7 +245,10 @@ Active, tracked in [Issues](https://github.com/vladkvlchk/arkenia/issues):
 
 ## 📄 License
 
-> 🛠️ **TODO** — _add a `LICENSE` file and update this line (MIT is a good default for a portfolio project)._
+Released under the [MIT License](LICENSE).
+
+The contracts are **unaudited** and deployed to Base Sepolia for demonstration only. The licence
+grants permission to use the code; it is not a warranty that the code is safe to hold value.
 
 ---
 
