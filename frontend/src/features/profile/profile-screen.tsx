@@ -24,7 +24,7 @@ import {
   Tr,
 } from "@/shared/ui";
 import { useWallet } from "@/shared/lib/mock-wallet";
-import { fmtDate, fmtNum } from "@/shared/lib/format";
+import { fmtAmount, fmtDate, fmtNum, sumTokens } from "@/shared/lib/format";
 import { TOKEN_SYMBOL } from "@/shared/config";
 import type { ActivityType } from "@/entities/campaign";
 import { OpenOrders } from "@/features/premarket/open-orders";
@@ -106,16 +106,27 @@ export function ProfileScreen({ address }: ProfileScreenProps) {
     );
   }
 
-  const totalPool = positions.reduce((s, p) => s + p.refundable, 0);
-  const totalClaimable = positions.reduce((s, p) => s + p.totalClaimable, 0);
+  // These three headline every balance the account holds, and each is a sum of token amounts —
+  // see sumTokens for why adding them as plain floats leaks precision into the display.
+  const totalPool = sumTokens(positions.map((p) => p.refundable));
+  const totalClaimable = sumTokens(positions.map((p) => p.totalClaimable));
   const cohorts = positions.flatMap((p) => p.cohorts);
-  const totalShares = cohorts.reduce((s, c) => s + c.shares, 0);
+  const totalShares = sumTokens(cohorts.map((c) => c.shares));
   const cohortCount = cohorts.length;
 
+  /**
+   * Seed names win, matching `withSeedOverride` and `useCampaignView` — the seeded demo
+   * campaigns keep their hardcoded names until metadata is persisted server-side. Asking the
+   * API first inverted that: it answers with a derived `Campaign 0xce9c…45ca` label for any
+   * campaign that has no stored record, and a non-empty string satisfies `??`, so the seed name
+   * was never reached. The same campaign then read "Meridian Yield" on its own page and
+   * "Campaign 0x011f…eeba" here. Both tabs resolve through this — the positions table printed
+   * the API's `campaignName` directly, so it disagreed with the history tab beside it too.
+   */
   const nameByAddr = new Map(positions.map((p) => [p.campaignAddress.toLowerCase(), p.campaignName]));
   const campaignLabel = (addr: string) =>
-    nameByAddr.get(addr.toLowerCase()) ??
     seedMeta(addr)?.name ??
+    nameByAddr.get(addr.toLowerCase()) ??
     `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 
   return (
@@ -146,7 +157,9 @@ export function ProfileScreen({ address }: ProfileScreenProps) {
       </div>
 
       <Card className="mt-6 grid grid-cols-1 gap-y-6 p-5 sm:grid-cols-3 sm:divide-x sm:divide-line sm:gap-y-0 sm:p-6">
-        <Stat label="Pool · refundable" value={fmtNum(totalPool)} unit={TOKEN_SYMBOL} size="sm" className="sm:pr-6" />
+        {/* Money at two decimals, matching the positions table below and the campaign page's
+            equivalent stats; the exact per-cohort figures stay in the ledger tables. */}
+        <Stat label="Pool · refundable" value={fmtAmount(totalPool)} unit={TOKEN_SYMBOL} size="sm" className="sm:pr-6" />
         <Stat
           label="Cohort shares"
           value={fmtNum(totalShares)}
@@ -157,7 +170,7 @@ export function ProfileScreen({ address }: ProfileScreenProps) {
         <div className="sm:pl-6">
           <Stat
             label="Claimable now"
-            value={fmtNum(totalClaimable)}
+            value={fmtAmount(totalClaimable)}
             unit={TOKEN_SYMBOL}
             size="sm"
             className="text-success"
@@ -219,7 +232,7 @@ export function ProfileScreen({ address }: ProfileScreenProps) {
                 <TBody>
                   {positions.map((p) => (
                     <Tr key={p.campaignAddress}>
-                      <Td className="font-medium text-ink">{p.campaignName}</Td>
+                      <Td className="font-medium text-ink">{campaignLabel(p.campaignAddress)}</Td>
                       <Td numeric>
                         <TokenAmount value={p.refundable} />
                       </Td>

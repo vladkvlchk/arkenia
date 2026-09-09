@@ -170,6 +170,23 @@ describe("ProfileScreen totals", () => {
     expect(statValue("Pool · refundable")).toContain("0");
     expect(screen.getByRole("button", { name: "Claim all" })).toBeDisabled();
   });
+
+  /**
+   * Claimable amounts are floored RAY arithmetic, so they land on the sixth
+   * decimal. Adding them as plain floats put "1 319.9999990000001" in the
+   * headline — thirteen digits of IEEE noise above a table reading 1 000.00
+   * and 320.00.
+   */
+  it("headlines a claimable total free of float noise", () => {
+    positions = [
+      position({ campaignAddress: AURORA, refundable: 0, totalClaimable: 1000, cohorts: [] }),
+      position({ campaignAddress: MERIDIAN, refundable: 0, totalClaimable: 319.999999, cohorts: [] }),
+    ];
+    renderProfile();
+
+    expect(statValue("Claimable now")).not.toMatch(/9{4}/);
+    expect(statValue("Claimable now")).toContain("320.00");
+  });
 });
 
 describe("ProfileScreen claiming", () => {
@@ -294,6 +311,20 @@ describe("ProfileScreen history", () => {
     await openHistory();
 
     expect(screen.getByText("Aurora Compute")).toBeInTheDocument();
+  });
+
+  /**
+   * The indexer answers with a derived "Campaign 0xce9c…45ca" label for any
+   * campaign whose metadata was never persisted. That is a non-empty string, so
+   * asking it first satisfied `??` and the seed name was never reached — the
+   * same campaign read "Aurora Compute" on its own page and an address here.
+   */
+  it("prefers the seeded name over the indexer's derived label", () => {
+    positions = [position({ campaignAddress: AURORA, campaignName: "Campaign 0xce9c…45ca" })];
+    renderProfile();
+
+    expect(screen.getByText("Aurora Compute")).toBeInTheDocument();
+    expect(screen.queryByText("Campaign 0xce9c…45ca")).not.toBeInTheDocument();
   });
 
   it("falls back to the address for a campaign nothing knows about", async () => {
