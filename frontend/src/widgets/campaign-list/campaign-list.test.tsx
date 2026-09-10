@@ -167,6 +167,20 @@ describe("ViewSwitch", () => {
     expect(screen.getByRole("tab", { name: "Cards" })).toHaveAttribute("aria-selected", "false");
   });
 
+  /**
+   * The buttons are icon-only. The label is still in the DOM as sr-only, and it is the whole
+   * accessible name — drop it and the control is announced as nothing at all.
+   */
+  it("keeps an accessible name once the label is visually hidden", () => {
+    render(<ViewSwitch value="cards" onChange={vi.fn()} />);
+
+    for (const label of ["Cards", "Table"]) {
+      const tab = screen.getByRole("tab", { name: label });
+      expect(tab).toHaveAttribute("title", label);
+      expect(within(tab).getByText(label)).toHaveClass("sr-only");
+    }
+  });
+
   it("reports the view the user picked", async () => {
     const onChange = vi.fn();
     const user = userEvent.setup();
