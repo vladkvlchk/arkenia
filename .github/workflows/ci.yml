@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, dev]
+    # testnet included: it is the branch Vercel deploys the live demo from, and merges into it
+    # were running no CI at all — a merge result nothing had built could reach production.
+    branches: [main, dev, testnet]
   pull_request:
 
 # One run per ref; cancel superseded runs.
