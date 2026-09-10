@@ -218,6 +218,10 @@ Every push and PR runs three parallel jobs; green CI is the merge gate into `mai
 A fourth job, **commits**, runs on pull requests only and checks every commit message against the
 convention below.
 
+Locally, a `pre-push` hook type-checks `frontend` (and `backend-v3` when its dependencies are
+installed) before anything reaches a deploying branch. It stops at `tsc` on purpose — `next build`
+takes minutes, and a hook that slow gets disabled.
+
 ### Commit convention
 
 [Conventional Commits](https://www.conventionalcommits.org), enforced by a `commit-msg` hook
