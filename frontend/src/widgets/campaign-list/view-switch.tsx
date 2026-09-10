@@ -11,9 +11,13 @@ const VIEWS: { value: CampaignView; label: string; icon: typeof LayoutGrid }[] =
 ];
 
 /**
- * Cards ↔ table toggle. A real toggle group rather than two icon buttons, so the current view is
- * announced and both options are reachable by keyboard; the labels stay visible above sm because
- * two abstract glyphs are not self-explanatory.
+ * Cards ↔ table toggle. Icon-only: the toolbar already carries a search field, four filter tabs
+ * and a sort control, and two more words of chrome crowd it — the grid and rows glyphs are a
+ * strong enough convention to carry it alone.
+ *
+ * The label survives as `sr-only`, so the control still has an accessible name; an icon-only
+ * button with no text is announced as nothing at all. `title` gives sighted users the same word
+ * on hover.
  */
 export function ViewSwitch({
   value,
@@ -26,9 +30,16 @@ export function ViewSwitch({
     <Tabs value={value} onValueChange={(v) => onChange(v as CampaignView)}>
       <TabsList variant="segmented" aria-label="List view">
         {VIEWS.map((v) => (
-          <TabsTrigger key={v.value} value={v.value}>
-            <v.icon className="h-3.5 w-3.5" aria-hidden />
-            <span className="sr-only sm:not-sr-only">{v.label}</span>
+          <TabsTrigger
+            key={v.value}
+            value={v.value}
+            title={v.label}
+            // Square, and centred: the segmented trigger is not a flex container, so an icon
+            // alone would sit inline against the text baseline rather than in the middle.
+            className="flex w-9 items-center justify-center px-0"
+          >
+            <v.icon className="h-4 w-4" aria-hidden />
+            <span className="sr-only">{v.label}</span>
           </TabsTrigger>
         ))}
       </TabsList>
