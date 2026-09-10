@@ -181,16 +181,28 @@ function CampaignsIndex() {
         </Button>
       </div>
 
-      {/* Index toolbar — the reading-room reference desk. */}
-      <div ref={listTopRef} className="mt-6 scroll-mt-24 space-y-3">
+      {/*
+        Index toolbar — the reading-room reference desk. One line from lg up, where the filters,
+        sort and view switch (~520px together) still leave the search a usable width; below that
+        the search takes its own row rather than being squeezed to a stub.
+
+        The search drops to h-10 on that single line — the compact control height DESIGN.md
+        sanctions ("height 40 (compact) / 44 (default)") — so it sits level with the 36px
+        segmented groups instead of towering over them.
+      */}
+      <div
+        ref={listTopRef}
+        className="mt-6 flex scroll-mt-24 flex-col gap-3 lg:flex-row lg:items-center"
+      >
         <SearchField
           value={query}
           onChange={search}
           hotkey="/"
           placeholder="Search campaigns, angels, addresses…"
           aria-label="Search campaigns"
+          className="lg:h-10 lg:min-w-0 lg:flex-1"
         />
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Tabs value={filter} onValueChange={(v) => filterTo(v as Filter)}>
             <TabsList variant="segmented">
               {FILTERS.map((f) => (
@@ -200,10 +212,8 @@ function CampaignsIndex() {
               ))}
             </TabsList>
           </Tabs>
-          <div className="flex items-center gap-3">
-            <SortSelect value={sort} onChange={sortTo} />
-            <ViewSwitch value={view} onChange={viewTo} />
-          </div>
+          <SortSelect value={sort} onChange={sortTo} />
+          <ViewSwitch value={view} onChange={viewTo} />
         </div>
       </div>
 
