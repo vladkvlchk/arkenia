@@ -44,7 +44,7 @@ jobs:
       # a copy from the registry if resolution misses, so CI could enforce a different version
       # than the lockfile pins — and it re-resolves against the registry either way, which is
       # where the last EBADENGINE line was coming from after the Node bump.
-      - run: npx --no commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose
+      - run: npx --no -- commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose
 
   contracts:
     name: contracts · hardhat
