@@ -215,6 +215,25 @@ Every push and PR runs three parallel jobs; green CI is the merge gate into `mai
 - **frontend** — `next build` (type-check + lint).
 - **backend-v3** — `tsc` build + `vitest` on an in-process **PGlite** database (no Postgres, no network).
 
+A fourth job, **commits**, runs on pull requests only and checks every commit message against the
+convention below.
+
+### Commit convention
+
+[Conventional Commits](https://www.conventionalcommits.org), enforced by a `commit-msg` hook
+(installed automatically by `npm install` at the repo root) and re-checked in CI:
+
+```
+type(scope): subject
+```
+
+- **type** — `feat` · `fix` · `refactor` · `style` · `chore` · `docs` · `test` · `perf` · `ci` · `build` · `revert`
+- **scope** — optional, lowercase (`frontend`, `contracts`, `backend-v3`, `deploy`, …)
+- **subject** — imperative, no trailing full stop, **≤ 100 characters**; longer explanations belong in the body
+
+`git commit --no-verify` skips the hook in an emergency. The CI job still runs, so the message has
+to be fixed before the PR can merge — amend it and force-push.
+
 ---
 
 ## 🔒 Security & status

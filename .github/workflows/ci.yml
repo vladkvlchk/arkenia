@@ -11,6 +11,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # The commit-msg hook is bypassable with --no-verify and does not run on GitHub's web editor,
+  # so the convention is enforced here too. PR-only: the range below needs a base commit, and
+  # `pull_request.base.sha` is empty on the push events this workflow also fires on.
+  commits:
+    name: commits · commitlint
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # commitlint walks a commit range; the default shallow clone has no range to walk.
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose
+
   contracts:
     name: contracts · hardhat
     runs-on: ubuntu-latest
