@@ -212,8 +212,11 @@ The frontend is **API-first with an on-chain fallback**: list/detail still rende
 Every push and PR runs three parallel jobs; green CI is the merge gate into `main`:
 
 - **contracts** — `hardhat compile` + `hardhat test` (in-process network).
-- **frontend** — `next build` (type-check + lint).
+- **frontend** — `vitest` (jsdom, mocked chain and API layers) + `next build`, which type-checks.
 - **backend-v3** — `tsc` build + `vitest` on an in-process **PGlite** database (no Postgres, no network).
+
+> No linter runs anywhere yet — there is no ESLint or Prettier config in the repo. Tracked in
+> [#23](https://github.com/vladkvlchk/arkenia/issues/23).
 
 A fourth job, **commits**, runs on pull requests only and checks every commit message against the
 convention below.
