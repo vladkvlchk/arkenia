@@ -29,3 +29,4 @@ export { Pagination, type PaginationProps } from "./pagination";
 export { Meter } from "./meter";
 export { ConnectWallet } from "./connect-wallet";
 export { ThemeToggle } from "./theme-toggle";
+export { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "./select";
