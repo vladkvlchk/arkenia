@@ -3,13 +3,18 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ChevronDown, Plus, SearchX } from "lucide-react";
+import { Plus, SearchX } from "lucide-react";
 import {
   Button,
   Container,
   EmptyState,
   Pagination,
   SearchField,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Tabs,
   TabsList,
   TabsTrigger,
@@ -267,27 +272,24 @@ function CampaignsIndex() {
   );
 }
 
+/**
+ * No visible "Sort" label: every option already reads as one ("Newest", "Most raised"), so the
+ * word only repeated what the value said. The control keeps an aria-label, which is what the
+ * removed text was actually carrying for anyone not looking at it.
+ */
 function SortSelect({ value, onChange }: { value: Sort; onChange: (v: Sort) => void }) {
   return (
-    <label className="flex items-center gap-2">
-      <span className="t-overline">Sort</span>
-      <span className="relative">
-        <select
-          value={value}
-          onChange={(e) => onChange(e.target.value as Sort)}
-          className="h-8 cursor-pointer appearance-none rounded-md border border-transparent bg-transparent pl-2 pr-7 text-[13px] font-medium text-ink transition-colors duration-150 hover:border-line focus:border-line-strong focus:outline-none"
-        >
-          {SORTS.map((s) => (
-            <option key={s.value} value={s.value}>
-              {s.label}
-            </option>
-          ))}
-        </select>
-        <ChevronDown
-          className="pointer-events-none absolute right-1.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-subtle"
-          aria-hidden
-        />
-      </span>
-    </label>
+    <Select value={value} onValueChange={(v) => onChange(v as Sort)}>
+      <SelectTrigger aria-label="Sort campaigns">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {SORTS.map((s) => (
+          <SelectItem key={s.value} value={s.value}>
+            {s.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
