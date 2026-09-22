@@ -17,7 +17,7 @@ import {
   TabsTrigger,
 } from "@/shared/ui";
 import { formatUnits } from "viem";
-import { fmtNum } from "@/shared/lib/format";
+import { fmtNum, sumTokens } from "@/shared/lib/format";
 import { TOKEN_SYMBOL } from "@/shared/config";
 import { CampaignMonogram, CampaignStatusBadge } from "@/entities/campaign";
 import { useWallet } from "@/shared/lib/mock-wallet";
@@ -80,7 +80,7 @@ export default function CampaignPage() {
     );
   }
 
-  const claimableTotal = cohorts.reduce((sum, c) => sum + c.yourClaimable, 0);
+  const claimableTotal = sumTokens(cohorts.map((c) => c.yourClaimable));
   const claimCohortIds = cohorts.filter((c) => c.yourClaimable > 0).map((c) => BigInt(c.index));
 
   return (

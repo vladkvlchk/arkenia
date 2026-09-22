@@ -18,6 +18,7 @@ import {
   useToast,
 } from "@/shared/ui";
 import { useWallet } from "@/shared/lib/mock-wallet";
+import { toAmountString } from "@/shared/lib/amount";
 import { fmtNum } from "@/shared/lib/format";
 import { TOKEN_SYMBOL } from "@/shared/config";
 import type { OrderSide } from "@/entities/market";
@@ -72,19 +73,23 @@ export function OrderTicket({ campaign, cohortIndex, currentCohort, yourShares }
   const total = parsedPrice * parsedSize;
   const connected = wallet.status === "connected";
 
+  // Validate the base units that actually get signed, not the floats behind
+  // them. Price and size can each sit inside the token's six decimals while
+  // their product falls below it — 0.001 × 0.0004 is 4e-7 USDC, which is zero
+  // on chain. A float check would rest an order giving shares away for nothing.
+  const shareAmount = parseUnits(toAmountString(parsedSize), 6);
+  const usdcAmount = parseUnits(toAmountString(total), 6);
+
   const sizeError =
     side === "ask" && parsedSize > yourShares
       ? `You hold ${fmtNum(yourShares)} shares in this cohort`
       : undefined;
-  const valid = connected && parsedPrice > 0 && parsedSize > 0 && total > 0 && !sizeError;
+  const valid = connected && shareAmount > 0n && usdcAmount > 0n && !sizeError;
 
   async function submit() {
     if (!valid || !wallet.address) return;
     setSubmitting(true);
     try {
-      const shareAmount = parseUnits(parsedSize.toFixed(6), 6);
-      const usdcAmount = parseUnits(total.toFixed(6), 6);
-
       if (side === "bid" && allowance < usdcAmount) {
         // Fills pull the maker's USDC peer-to-peer — approve once, up front.
         setStep(`Approving ${TOKEN_SYMBOL}…`);

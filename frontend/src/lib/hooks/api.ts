@@ -21,6 +21,23 @@ export function useApiCampaigns() {
   });
 }
 
+/**
+ * One campaign's indexed record plus its cohort ledger. Carries the aggregates the chain cannot
+ * answer cheaply — lifetime deposited/returned, believer count, creation and cohort formation
+ * times. Deliberately queried without an `account`: viewer-scoped figures come from
+ * `useMyPosition`'s direct reads so they stay correct the moment a tx confirms, and omitting it
+ * keeps one shared cache entry across every viewer of the page.
+ */
+export function useApiCampaign(address?: Addr) {
+  return useQuery({
+    queryKey: ["v3", "campaign", address?.toLowerCase()],
+    queryFn: () => api.getCampaign(address as Addr),
+    enabled: API_ENABLED && !!address,
+    staleTime: STALE,
+    retry: 1,
+  });
+}
+
 export function useApiCampaignMetadata(address?: Addr) {
   return useQuery({
     queryKey: ["v3", "metadata", address?.toLowerCase()],

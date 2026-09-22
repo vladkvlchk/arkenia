@@ -3,29 +3,42 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ChevronDown, Plus, SearchX } from "lucide-react";
+import { Plus, SearchX } from "lucide-react";
 import {
   Button,
   Container,
   EmptyState,
   Pagination,
   SearchField,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Tabs,
   TabsList,
   TabsTrigger,
 } from "@/shared/ui";
 import { fmtNum } from "@/shared/lib/format";
-import { CampaignCard, type Campaign, type CampaignStatus } from "@/entities/campaign";
+import { type Campaign, type CampaignStatus } from "@/entities/campaign";
+import { CampaignList, ViewSwitch, type CampaignView } from "@/widgets";
 import { useAllCampaigns } from "@/lib/hooks/campaign-data";
 
 // Live factory enumeration + on-chain summaries, filtered/sorted client-side.
 // TODO(onchain): move search/sort/pagination server-side to an indexer once it exists —
-// the URL state contract (q, status, sort, page) stays identical.
+// the URL state contract (q, status, sort, view, page) stays identical.
 
 type Filter = "all" | CampaignStatus;
 type Sort = "new" | "raised" | "returned" | "believers";
 
-const PAGE_SIZE = 12;
+/**
+ * Cards are for browsing, the table for comparing — so the table earns a denser page. Changing
+ * view therefore changes what "page 3" means, which is why switching resets to the first page.
+ */
+const PAGE_SIZE: Record<CampaignView, number> = { cards: 12, table: 24 };
+
+/** Survives a visit with no `view` param; an explicit param always wins over it. */
+const VIEW_KEY = "arkenia:campaigns:view";
 
 const FILTERS: { value: Filter; label: string }[] = [
   { value: "all", label: "All" },
@@ -63,6 +76,7 @@ function matches(c: Campaign, query: string): boolean {
 const isFilter = (v: string | null): v is Filter =>
   v !== null && FILTERS.some((f) => f.value === v);
 const isSort = (v: string | null): v is Sort => v !== null && SORTS.some((s) => s.value === v);
+const isView = (v: string | null): v is CampaignView => v === "cards" || v === "table";
 
 export default function CampaignsPage() {
   // useSearchParams needs a Suspense boundary for static prerender.
@@ -82,8 +96,22 @@ function CampaignsIndex() {
   const [filter, setFilter] = useState<Filter>(isFilter(params.get("status")) ? params.get("status") as Filter : "all");
   const [sort, setSort] = useState<Sort>(isSort(params.get("sort")) ? (params.get("sort") as Sort) : "new");
   const [page, setPage] = useState(Math.max(1, Number(params.get("page")) || 1));
+  const [view, setView] = useState<CampaignView>(
+    isView(params.get("view")) ? (params.get("view") as CampaignView) : "cards"
+  );
 
   const listTopRef = useRef<HTMLDivElement>(null);
+
+  // The stored preference is read after mount, not during render: localStorage does not exist on
+  // the server, and seeding state from it would hydrate a different view than was prerendered.
+  // A `view` in the URL is an explicit choice and outranks it.
+  useEffect(() => {
+    if (isView(params.get("view"))) return;
+    const saved = window.localStorage.getItem(VIEW_KEY);
+    if (isView(saved)) setView(saved);
+    // Runs once: this restores an initial preference, and must not fight later user changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const { campaigns: allCampaigns, isLoading } = useAllCampaigns();
 
@@ -94,25 +122,29 @@ function CampaignsIndex() {
     return [...filtered].sort(bySort[sort]);
   }, [allCampaigns, query, filter, sort]);
 
-  const pageCount = Math.max(1, Math.ceil(results.length / PAGE_SIZE));
+  const pageSize = PAGE_SIZE[view];
+  const pageCount = Math.max(1, Math.ceil(results.length / pageSize));
   const current = Math.min(page, pageCount);
-  const pageItems = results.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
-  const rangeStart = (current - 1) * PAGE_SIZE + 1;
-  const rangeEnd = Math.min(current * PAGE_SIZE, results.length);
+  const pageItems = results.slice((current - 1) * pageSize, current * pageSize);
+  const rangeStart = (current - 1) * pageSize + 1;
+  const rangeEnd = Math.min(current * pageSize, results.length);
 
-  // The folio opening (featured split card) belongs to the untouched first page.
-  const showFeatured = current === 1 && query.trim() === "";
+  // The folio opening (featured split card) belongs to the untouched first page — and to the
+  // card view alone, where it is a card. In the table it is simply row one.
+  const showFeatured = view === "cards" && current === 1 && query.trim() === "";
 
-  // Shareable URL state; replace (not push) so typing doesn't spam history.
+  // Shareable URL state; replace (not push) so typing doesn't spam history. Defaults are omitted
+  // so a plain /campaigns link stays clean.
   useEffect(() => {
     const p = new URLSearchParams();
     if (query) p.set("q", query);
     if (filter !== "all") p.set("status", filter);
     if (sort !== "new") p.set("sort", sort);
+    if (view !== "cards") p.set("view", view);
     if (current > 1) p.set("page", String(current));
     const qs = p.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  }, [query, filter, sort, current, pathname, router]);
+  }, [query, filter, sort, view, current, pathname, router]);
 
   const search = (v: string) => {
     setQuery(v);
@@ -125,6 +157,12 @@ function CampaignsIndex() {
   const sortTo = (v: Sort) => {
     setSort(v);
     setPage(1);
+  };
+  // Page 3 of 12-per-page is not page 3 of 24-per-page, so the page resets with the view.
+  const viewTo = (v: CampaignView) => {
+    setView(v);
+    setPage(1);
+    window.localStorage.setItem(VIEW_KEY, v);
   };
   const goToPage = (p: number) => {
     setPage(p);
@@ -148,16 +186,28 @@ function CampaignsIndex() {
         </Button>
       </div>
 
-      {/* Index toolbar — the reading-room reference desk. */}
-      <div ref={listTopRef} className="mt-6 scroll-mt-24 space-y-3">
+      {/*
+        Index toolbar — the reading-room reference desk. One line from lg up, where the filters,
+        sort and view switch (~520px together) still leave the search a usable width; below that
+        the search takes its own row rather than being squeezed to a stub.
+
+        The search drops to h-10 on that single line — the compact control height DESIGN.md
+        sanctions ("height 40 (compact) / 44 (default)") — so it sits level with the 36px
+        segmented groups instead of towering over them.
+      */}
+      <div
+        ref={listTopRef}
+        className="mt-6 flex scroll-mt-24 flex-col gap-3 lg:flex-row lg:items-center"
+      >
         <SearchField
           value={query}
           onChange={search}
           hotkey="/"
           placeholder="Search campaigns, angels, addresses…"
           aria-label="Search campaigns"
+          className="lg:h-10 lg:min-w-0 lg:flex-1"
         />
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Tabs value={filter} onValueChange={(v) => filterTo(v as Filter)}>
             <TabsList variant="segmented">
               {FILTERS.map((f) => (
@@ -168,6 +218,7 @@ function CampaignsIndex() {
             </TabsList>
           </Tabs>
           <SortSelect value={sort} onChange={sortTo} />
+          <ViewSwitch value={view} onChange={viewTo} />
         </div>
       </div>
 
@@ -196,15 +247,14 @@ function CampaignsIndex() {
           />
         </div>
       ) : (
-        <div className="mt-6 space-y-4">
-          {showFeatured && (
-            <CampaignCard campaign={pageItems[0]} variant="split" featured />
-          )}
-          <div className="grid gap-4 md:grid-cols-2">
-            {(showFeatured ? pageItems.slice(1) : pageItems).map((c) => (
-              <CampaignCard key={c.address} campaign={c} />
-            ))}
-          </div>
+        <div className="mt-6">
+          <CampaignList
+            campaigns={pageItems}
+            view={view}
+            sort={sort}
+            onSortChange={sortTo}
+            featureFirst={showFeatured}
+          />
         </div>
       )}
 
@@ -222,27 +272,24 @@ function CampaignsIndex() {
   );
 }
 
+/**
+ * No visible "Sort" label: every option already reads as one ("Newest", "Most raised"), so the
+ * word only repeated what the value said. The control keeps an aria-label, which is what the
+ * removed text was actually carrying for anyone not looking at it.
+ */
 function SortSelect({ value, onChange }: { value: Sort; onChange: (v: Sort) => void }) {
   return (
-    <label className="flex items-center gap-2">
-      <span className="t-overline">Sort</span>
-      <span className="relative">
-        <select
-          value={value}
-          onChange={(e) => onChange(e.target.value as Sort)}
-          className="h-8 cursor-pointer appearance-none rounded-md border border-transparent bg-transparent pl-2 pr-7 text-[13px] font-medium text-ink transition-colors duration-150 hover:border-line focus:border-line-strong focus:outline-none"
-        >
-          {SORTS.map((s) => (
-            <option key={s.value} value={s.value}>
-              {s.label}
-            </option>
-          ))}
-        </select>
-        <ChevronDown
-          className="pointer-events-none absolute right-1.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-subtle"
-          aria-hidden
-        />
-      </span>
-    </label>
+    <Select value={value} onValueChange={(v) => onChange(v as Sort)}>
+      <SelectTrigger aria-label="Sort campaigns">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {SORTS.map((s) => (
+          <SelectItem key={s.value} value={s.value}>
+            {s.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }

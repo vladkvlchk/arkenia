@@ -25,10 +25,13 @@ export function CampaignMonogram({ name, coverUrl, size = "md", className }: Cam
   // Track the URL that failed so a later coverUrl change re-attempts the image.
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
 
+  // Trim first: a name that arrives padded splits into a leading empty string,
+  // which would consume one of the two initial slots and silently drop a letter.
   const initials = name
+    .trim()
     .split(/\s+/)
     .slice(0, 2)
-    .map((w) => w[0])
+    .map((word) => word[0] ?? "")
     .join("")
     .toUpperCase();
 

@@ -6,13 +6,40 @@ import { explorerTxUrl } from "@/shared/config";
 import type { ActivityItem, ActivityType } from "@/entities/campaign";
 import { Activity } from "lucide-react";
 
-const typeConfig: Record<ActivityType, { icon: LucideIcon; label: (i: ActivityItem) => string }> = {
+interface TypeConfig {
+  icon: LucideIcon;
+  label: (i: ActivityItem) => string;
+}
+
+/**
+ * `cohortIndex` is optional, and two event shapes genuinely lack it — the
+ * contract emits neither `FundsReturnedToAll` nor `Claimed` with a cohortId
+ * (a claim settles every held cohort in one event). Interpolating it directly
+ * printed a literal "#undefined" into the audit trail.
+ */
+const typeConfig: Record<ActivityType, TypeConfig> = {
   deposit: { icon: ArrowDownLeft, label: () => "Deposit to pool" },
   withdraw: { icon: Layers, label: (i) => `Cohort #${i.cohortIndex} minted` },
-  return: { icon: CornerDownLeft, label: (i) => `Return to Cohort #${i.cohortIndex}` },
-  claim: { icon: HandCoins, label: (i) => `Claim from Cohort #${i.cohortIndex}` },
+  return: {
+    icon: CornerDownLeft,
+    label: (i) =>
+      i.cohortIndex === undefined ? "Return to all cohorts" : `Return to Cohort #${i.cohortIndex}`,
+  },
+  claim: {
+    icon: HandCoins,
+    label: (i) =>
+      i.cohortIndex === undefined ? "Claim rewards" : `Claim from Cohort #${i.cohortIndex}`,
+  },
   refund: { icon: Undo2, label: () => "Pool refund" },
 };
+
+/**
+ * Rows arrive from the indexer unvalidated, so `type` is only a compile-time
+ * union. A value added on the backend before this table knows about it would
+ * otherwise destructure undefined and take the whole route down with it —
+ * losing the rest of a feed that is perfectly renderable.
+ */
+const unknownType: TypeConfig = { icon: Activity, label: (i) => i.type };
 
 /** Chronological, verifiable event list — every row links to its transaction. */
 export function ActivityFeed({ items }: { items: ActivityItem[] }) {
@@ -31,7 +58,7 @@ export function ActivityFeed({ items }: { items: ActivityItem[] }) {
       ) : (
         <ul>
           {items.map((item) => {
-            const { icon: Icon, label } = typeConfig[item.type];
+            const { icon: Icon, label } = typeConfig[item.type] ?? unknownType;
             return (
               <li
                 key={item.id}

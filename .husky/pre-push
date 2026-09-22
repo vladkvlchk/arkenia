@@ -1,0 +1,16 @@
+# Any failing check must abort the push. Without this, a failure is masked by the exit code of
+# whichever check happens to run last.
+set -e
+
+# Type-check what Vercel builds, before it reaches a branch that deploys.
+#
+# Kept to tsc: `next build` takes ~3.5 minutes, and a hook that slow gets disabled, taking the
+# commit-msg hook with it. This is a fast net for the common break, not a local mirror of CI.
+npm run --workspace frontend typecheck
+
+# backend-v3 is not a workspace — it has its own lockfile and node_modules, so it is only
+# checked when those are actually installed. Skipping beats failing a push over a missing
+# directory that has nothing to do with the change being pushed.
+if [ -d backend-v3/node_modules ]; then
+  npm --prefix backend-v3 run typecheck
+fi

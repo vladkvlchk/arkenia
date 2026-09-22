@@ -9,6 +9,7 @@ export {
   getCohorts,
 } from "./mock";
 export { CampaignCard, type CampaignCardVariant } from "./ui/campaign-card";
+export { CampaignRow } from "./ui/campaign-row";
 export { CampaignStatusBadge } from "./ui/campaign-status-badge";
 export { CampaignMonogram } from "./ui/campaign-monogram";
 export { CampaignBanner } from "./ui/campaign-banner";
